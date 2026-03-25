@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { login } from "@/lib/auth";
+import { loginCustomer } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -71,8 +71,8 @@ export function AuthModal() {
     setInfo("");
     setLoading(true);
     try {
-      await login({ email, password });
-      router.push("/dashboard");
+      await loginCustomer({ email, password });
+      router.push("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {

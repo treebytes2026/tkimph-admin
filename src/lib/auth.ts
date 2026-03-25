@@ -17,8 +17,8 @@ interface AuthResponse {
   token: string;
 }
 
-export async function login(credentials: LoginCredentials): Promise<AuthResponse> {
-  const res = await fetch(`${API_URL}/login`, {
+async function authRequest(path: string, credentials: LoginCredentials): Promise<AuthResponse> {
+  const res = await fetch(`${API_URL}${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -36,6 +36,14 @@ export async function login(credentials: LoginCredentials): Promise<AuthResponse
   localStorage.setItem("token", data.token);
   localStorage.setItem("user", JSON.stringify(data.user));
   return data;
+}
+
+export function loginCustomer(credentials: LoginCredentials): Promise<AuthResponse> {
+  return authRequest("/login", credentials);
+}
+
+export function loginAdmin(credentials: LoginCredentials): Promise<AuthResponse> {
+  return authRequest("/admin/login", credentials);
 }
 
 export async function getUser(): Promise<User | null> {

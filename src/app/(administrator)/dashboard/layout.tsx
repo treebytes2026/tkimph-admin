@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { getStoredUser, getStoredToken, logout } from "@/lib/auth";
+import { ADMIN_LOGIN_PATH } from "@/lib/routes";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
@@ -101,26 +102,20 @@ export default function AdministratorDashboardLayout({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [user, setUser] = useState<{
-    name: string;
-    email: string;
-    role: string;
-  } | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const user = getStoredUser();
 
   useEffect(() => {
     const token = getStoredToken();
     const storedUser = getStoredUser();
     if (!token || !storedUser) {
-      router.push("/login");
-      return;
+      router.push(ADMIN_LOGIN_PATH);
     }
-    setUser(storedUser);
   }, [router]);
 
   async function handleLogout() {
     await logout();
-    router.push("/login");
+    router.push(ADMIN_LOGIN_PATH);
   }
 
   if (!user) {
