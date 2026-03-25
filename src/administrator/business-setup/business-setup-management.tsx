@@ -12,7 +12,6 @@ import {
   fetchBusinessCategories,
   fetchBusinessTypes,
   fetchCuisines,
-  updateBusinessCategory,
   updateBusinessType,
   updateCuisine,
   type BusinessCategoryRow,

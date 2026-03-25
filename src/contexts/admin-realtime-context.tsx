@@ -45,7 +45,9 @@ export function AdminRealtimeProvider({ children }: { children: React.ReactNode 
   }, []);
 
   useEffect(() => {
-    void refresh();
+    queueMicrotask(() => {
+      void refresh();
+    });
     const interval = window.setInterval(() => void refresh(), POLL_MS);
     const onVisibility = () => {
       if (document.visibilityState === "visible") void refresh();

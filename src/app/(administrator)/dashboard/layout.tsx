@@ -144,13 +144,15 @@ export default function AdministratorDashboardLayout({
   const [authReady, setAuthReady] = useState(false);
 
   useEffect(() => {
-    const token = getStoredToken();
-    const storedUser = getStoredUser();
-    setUser(storedUser);
-    setAuthReady(true);
-    if (!token || !storedUser) {
-      router.push(ADMIN_LOGIN_PATH);
-    }
+    queueMicrotask(() => {
+      const token = getStoredToken();
+      const storedUser = getStoredUser();
+      setUser(storedUser);
+      setAuthReady(true);
+      if (!token || !storedUser) {
+        router.push(ADMIN_LOGIN_PATH);
+      }
+    });
   }, [router]);
 
   if (!authReady || !user) {

@@ -105,17 +105,19 @@ export default function PartnerDashboardLayout({ children }: { children: React.R
   const user = getStoredUser();
 
   useEffect(() => {
-    const u = getStoredUser();
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-    if (!token || !u) {
-      router.replace("/login");
-      return;
-    }
-    if (u.role !== "restaurant_owner") {
-      router.replace("/");
-      return;
-    }
-    setReady(true);
+    queueMicrotask(() => {
+      const u = getStoredUser();
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      if (!token || !u) {
+        router.replace("/login");
+        return;
+      }
+      if (u.role !== "restaurant_owner") {
+        router.replace("/");
+        return;
+      }
+      setReady(true);
+    });
   }, [router]);
 
   async function handleLogout() {
