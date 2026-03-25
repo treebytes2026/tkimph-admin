@@ -1,13 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { getStoredUser, getStoredToken, logout } from "@/lib/auth";
+import {
+  getStoredUser,
+  getStoredToken,
+  logout,
+  type AuthUser,
+} from "@/lib/auth";
 import { ADMIN_LOGIN_PATH } from "@/lib/routes";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { AdminNotificationBell } from "@/components/admin/admin-notification-bell";
+import { AdminRealtimeProvider, useAdminRealtime } from "@/contexts/admin-realtime-context";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
@@ -27,18 +35,32 @@ import {
   LogOut,
   Menu,
   ChevronRight,
+  ClipboardList,
+  Tags,
+  UserCircle,
 } from "lucide-react";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Users", href: "/dashboard/users", icon: Users },
   { name: "Restaurants", href: "/dashboard/restaurants", icon: Store },
-  { name: "Riders", href: "/dashboard/riders", icon: Bike },
+  { name: "Partner applications", href: "/dashboard/partner-applications", icon: ClipboardList },
+  { name: "Rider applications", href: "/dashboard/rider-applications", icon: Bike },
+  { name: "Business setup", href: "/dashboard/business-setup", icon: Tags },
+  { name: "Riders", href: "/dashboard/riders", icon: UserCircle },
   { name: "Orders", href: "/dashboard/orders", icon: ShoppingBag },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 
-function SidebarContent({ pathname }: { pathname: string }) {
+function SidebarContent({
+  pathname,
+  pendingPartner,
+  pendingRider,
+}: {
+  pathname: string;
+  pendingPartner: number;
+  pendingRider: number;
+}) {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-3 px-5 py-6">
@@ -65,19 +87,35 @@ function SidebarContent({ pathname }: { pathname: string }) {
           const isActive =
             pathname === item.href ||
             (item.href !== "/dashboard" && pathname.startsWith(item.href));
+          const pending =
+            item.href === "/dashboard/partner-applications"
+              ? pendingPartner
+              : item.href === "/dashboard/rider-applications"
+                ? pendingRider
+                : 0;
           return (
             <Link
               key={item.name}
               href={item.href}
-              className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all ${
+              className={`group flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all ${
                 isActive
                   ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md shadow-black/10"
                   : "text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
               }`}
             >
               <item.icon className="size-[1.15rem] shrink-0 opacity-90" strokeWidth={2} />
-              {item.name}
-              {isActive && <ChevronRight className="ml-auto size-4 opacity-80" />}
+              <span className="min-w-0 flex-1 truncate">{item.name}</span>
+              <span className="flex shrink-0 items-center gap-1">
+                {pending > 0 ? (
+                  <Badge
+                    variant="secondary"
+                    className="h-5 min-w-5 justify-center border-0 bg-brand-yellow px-1 text-[10px] font-bold tabular-nums text-brand-yellow-foreground shadow-sm hover:bg-brand-yellow"
+                  >
+                    {pending > 99 ? "99+" : pending}
+                  </Badge>
+                ) : null}
+                {isActive ? <ChevronRight className="size-4 opacity-80" /> : null}
+              </span>
             </Link>
           );
         })}
@@ -101,24 +139,23 @@ export default function AdministratorDashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const user = getStoredUser();
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [authReady, setAuthReady] = useState(false);
 
   useEffect(() => {
-    const token = getStoredToken();
-    const storedUser = getStoredUser();
-    if (!token || !storedUser) {
-      router.push(ADMIN_LOGIN_PATH);
-    }
+    queueMicrotask(() => {
+      const token = getStoredToken();
+      const storedUser = getStoredUser();
+      setUser(storedUser);
+      setAuthReady(true);
+      if (!token || !storedUser) {
+        router.push(ADMIN_LOGIN_PATH);
+      }
+    });
   }, [router]);
 
-  async function handleLogout() {
-    await logout();
-    router.push(ADMIN_LOGIN_PATH);
-  }
-
-  if (!user) {
+  if (!authReady || !user) {
     return (
       <div className="flex h-screen items-center justify-center bg-muted/30">
         <div className="flex items-center gap-3">
@@ -131,6 +168,31 @@ export default function AdministratorDashboardLayout({
       </div>
     );
   }
+
+  return (
+    <AdminRealtimeProvider>
+      <DashboardChrome user={user} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}>
+        {children}
+      </DashboardChrome>
+    </AdminRealtimeProvider>
+  );
+}
+
+function DashboardChrome({
+  user,
+  sidebarOpen,
+  setSidebarOpen,
+  children,
+}: {
+  user: AuthUser;
+  sidebarOpen: boolean;
+  setSidebarOpen: (open: boolean) => void;
+  children: React.ReactNode;
+}) {
+  const pathname = usePathname();
+  const { registrationStats } = useAdminRealtime();
+  const pendingPartner = registrationStats?.pending_partner_applications ?? 0;
+  const pendingRider = registrationStats?.pending_rider_applications ?? 0;
 
   const initials = user.name
     .split(" ")
@@ -145,15 +207,30 @@ export default function AdministratorDashboardLayout({
       (item.href !== "/dashboard" && pathname.startsWith(item.href))
   );
 
+  const router = useRouter();
+
+  async function handleLogout() {
+    await logout();
+    router.push(ADMIN_LOGIN_PATH);
+  }
+
   return (
     <div className="flex min-h-screen bg-muted/25">
       <aside className="hidden w-64 shrink-0 border-r border-sidebar-border/80 bg-sidebar shadow-[4px_0_24px_-12px_rgba(0,0,0,0.15)] lg:flex lg:flex-col">
-        <SidebarContent pathname={pathname} />
+        <SidebarContent
+          pathname={pathname}
+          pendingPartner={pendingPartner}
+          pendingRider={pendingRider}
+        />
       </aside>
 
       <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
         <SheetContent side="left" className="w-64 border-sidebar-border bg-sidebar p-0">
-          <SidebarContent pathname={pathname} />
+          <SidebarContent
+            pathname={pathname}
+            pendingPartner={pendingPartner}
+            pendingRider={pendingRider}
+          />
         </SheetContent>
       </Sheet>
 
@@ -177,42 +254,45 @@ export default function AdministratorDashboardLayout({
             </div>
           </div>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  className="h-auto gap-2 rounded-xl py-2 pl-2 pr-3 hover:bg-muted/80"
-                />
-              }
-            >
-              <Avatar className="size-9 ring-2 ring-border/60">
-                <AvatarFallback className="bg-primary text-sm font-bold text-primary-foreground">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-              <div className="hidden text-left sm:block">
-                <p className="max-w-[10rem] truncate text-sm font-semibold">{user.name}</p>
-                <p className="text-xs capitalize text-muted-foreground">
-                  {user.role.replace("_", " ")}
-                </p>
-              </div>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52 rounded-xl">
-              <div className="px-2 py-2">
-                <p className="text-sm font-semibold">{user.name}</p>
-                <p className="truncate text-xs text-muted-foreground">{user.email}</p>
-              </div>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={handleLogout}
-                className="gap-2 rounded-lg text-destructive focus:text-destructive"
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+            <AdminNotificationBell />
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    className="h-auto gap-2 rounded-xl py-2 pl-2 pr-3 hover:bg-muted/80"
+                  />
+                }
               >
-                <LogOut className="size-4" />
-                Sign out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <Avatar className="size-9 ring-2 ring-border/60">
+                  <AvatarFallback className="bg-primary text-sm font-bold text-primary-foreground">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="hidden text-left sm:block">
+                  <p className="max-w-[10rem] truncate text-sm font-semibold">{user.name}</p>
+                  <p className="text-xs capitalize text-muted-foreground">
+                    {user.role.replace("_", " ")}
+                  </p>
+                </div>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52 rounded-xl">
+                <div className="px-2 py-2">
+                  <p className="text-sm font-semibold">{user.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={handleLogout}
+                  className="gap-2 rounded-lg text-destructive focus:text-destructive"
+                >
+                  <LogOut className="size-4" />
+                  Sign out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </header>
 
         <main className="flex-1 overflow-x-hidden overflow-y-auto px-4 py-6 lg:px-8 lg:py-8">

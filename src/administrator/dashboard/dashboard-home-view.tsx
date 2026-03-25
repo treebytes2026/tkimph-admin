@@ -1,9 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
+import { useAdminRealtime } from "@/contexts/admin-realtime-context";
 import {
   Users,
   Store,
@@ -15,6 +18,7 @@ import {
   CheckCircle,
   ArrowUpRight,
   Sparkles,
+  ClipboardList,
 } from "lucide-react";
 
 const stats = [
@@ -128,6 +132,13 @@ function getStatusBadge(status: string) {
 }
 
 export function DashboardHomeView() {
+  const { registrationStats: regStats } = useAdminRealtime();
+
+  const pendingTotal =
+    regStats != null
+      ? regStats.pending_partner_applications + regStats.pending_rider_applications
+      : null;
+
   return (
     <div className="mx-auto max-w-7xl space-y-8">
       {/* Welcome */}
@@ -153,6 +164,41 @@ export function DashboardHomeView() {
           Generate report
         </Button>
       </div>
+
+      {pendingTotal !== null && pendingTotal > 0 ? (
+        <Card className="border-primary/25 bg-primary/[0.04] shadow-sm">
+          <CardContent className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
+                <ClipboardList className="size-5" strokeWidth={1.75} />
+              </div>
+              <div>
+                <p className="font-semibold text-foreground">Pending registration reviews</p>
+                <p className="text-sm text-muted-foreground">
+                  {regStats!.pending_partner_applications} partner
+                  {regStats!.pending_partner_applications === 1 ? "" : "s"},{" "}
+                  {regStats!.pending_rider_applications} rider
+                  {regStats!.pending_rider_applications === 1 ? "" : "s"} waiting for action.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href="/dashboard/partner-applications"
+                className={cn(buttonVariants({ variant: "default", size: "sm" }), "rounded-xl")}
+              >
+                Partner queue
+              </Link>
+              <Link
+                href="/dashboard/rider-applications"
+                className={cn(buttonVariants({ variant: "outline", size: "sm" }), "rounded-xl")}
+              >
+                Rider queue
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {/* KPI grid */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

@@ -106,8 +106,14 @@ export interface AdminRestaurant {
   phone: string | null;
   address: string | null;
   user_id: number;
+  business_type_id: number | null;
+  business_category_id: number | null;
+  cuisine_id: number | null;
   is_active: boolean;
   owner: { id: number; name: string; email: string; role: string } | null;
+  business_type: { id: number; name: string; slug: string } | null;
+  business_category: { id: number; name: string } | null;
+  cuisine: { id: number; name: string } | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -176,4 +182,301 @@ export function deleteRestaurant(id: number): Promise<void> {
 
 export function toggleRestaurantActive(id: number): Promise<AdminRestaurant> {
   return adminFetch<AdminRestaurant>(`/restaurants/${id}/toggle-active`, { method: "PATCH" });
+}
+
+export interface RegistrationStats {
+  pending_partner_applications: number;
+  pending_rider_applications: number;
+}
+
+export function fetchRegistrationStats(): Promise<RegistrationStats> {
+  return adminFetch<RegistrationStats>("/registration-stats");
+}
+
+export interface AdminNotificationPayload {
+  type?: string;
+  id?: number;
+  business_name?: string;
+  owner_name?: string;
+  email?: string;
+  name?: string;
+}
+
+export interface AdminNotificationRow {
+  id: string;
+  type: string;
+  data: AdminNotificationPayload;
+  read_at: string | null;
+  created_at: string | null;
+}
+
+export function fetchUnreadNotificationCount(): Promise<{ count: number }> {
+  return adminFetch<{ count: number }>("/notifications/unread-count");
+}
+
+export function fetchAdminNotifications(params?: {
+  page?: number;
+  per_page?: number;
+}): Promise<Paginated<AdminNotificationRow>> {
+  const q = new URLSearchParams();
+  if (params?.page) q.set("page", String(params.page));
+  if (params?.per_page) q.set("per_page", String(params.per_page));
+  const qs = q.toString();
+  return adminFetch<Paginated<AdminNotificationRow>>(
+    `/notifications${qs ? `?${qs}` : ""}`
+  );
+}
+
+export function markNotificationRead(id: string): Promise<void> {
+  return adminFetch<void>(`/notifications/${id}/read`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export function markAllNotificationsRead(): Promise<void> {
+  return adminFetch<void>("/notifications/read-all", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export interface PartnerApplicationRow {
+  id: number;
+  owner_first_name: string;
+  owner_last_name: string;
+  email: string;
+  phone: string;
+  business_name: string;
+  business_type_id: number;
+  business_category_id: number | null;
+  cuisine_id: number | null;
+  address: string | null;
+  notes: string | null;
+  status: string;
+  admin_notes: string | null;
+  reviewed_at: string | null;
+  reviewed_by: number | null;
+  business_type: { id: number; name: string; slug: string } | null;
+  business_category: { id: number; name: string } | null;
+  cuisine: { id: number; name: string } | null;
+  reviewer: { id: number; name: string } | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export function fetchPartnerApplications(params: {
+  page?: number;
+  status?: string;
+  search?: string;
+}): Promise<Paginated<PartnerApplicationRow>> {
+  const q = new URLSearchParams();
+  if (params.page) q.set("page", String(params.page));
+  if (params.status) q.set("status", params.status);
+  if (params.search) q.set("search", params.search);
+  const qs = q.toString();
+  return adminFetch<Paginated<PartnerApplicationRow>>(
+    `/partner-applications${qs ? `?${qs}` : ""}`
+  );
+}
+
+export function fetchPartnerApplication(id: number): Promise<PartnerApplicationRow> {
+  return adminFetch<PartnerApplicationRow>(`/partner-applications/${id}`);
+}
+
+export function approvePartnerApplication(
+  id: number,
+  body?: { admin_notes?: string | null }
+): Promise<PartnerApplicationRow> {
+  return adminFetch<PartnerApplicationRow>(`/partner-applications/${id}/approve`, {
+    method: "POST",
+    body: JSON.stringify(body ?? {}),
+  });
+}
+
+export function rejectPartnerApplication(
+  id: number,
+  body?: { admin_notes?: string | null }
+): Promise<PartnerApplicationRow> {
+  return adminFetch<PartnerApplicationRow>(`/partner-applications/${id}/reject`, {
+    method: "POST",
+    body: JSON.stringify(body ?? {}),
+  });
+}
+
+export interface RiderApplicationRow {
+  id: number;
+  name: string;
+  email: string;
+  phone: string;
+  address: string | null;
+  vehicle_type: string | null;
+  license_number: string | null;
+  notes: string | null;
+  status: string;
+  admin_notes: string | null;
+  reviewed_at: string | null;
+  reviewed_by: number | null;
+  reviewer: { id: number; name: string } | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export function fetchRiderApplications(params: {
+  page?: number;
+  status?: string;
+  search?: string;
+}): Promise<Paginated<RiderApplicationRow>> {
+  const q = new URLSearchParams();
+  if (params.page) q.set("page", String(params.page));
+  if (params.status) q.set("status", params.status);
+  if (params.search) q.set("search", params.search);
+  const qs = q.toString();
+  return adminFetch<Paginated<RiderApplicationRow>>(`/rider-applications${qs ? `?${qs}` : ""}`);
+}
+
+export function approveRiderApplication(
+  id: number,
+  body?: { admin_notes?: string | null }
+): Promise<RiderApplicationRow> {
+  return adminFetch<RiderApplicationRow>(`/rider-applications/${id}/approve`, {
+    method: "POST",
+    body: JSON.stringify(body ?? {}),
+  });
+}
+
+export function rejectRiderApplication(
+  id: number,
+  body?: { admin_notes?: string | null }
+): Promise<RiderApplicationRow> {
+  return adminFetch<RiderApplicationRow>(`/rider-applications/${id}/reject`, {
+    method: "POST",
+    body: JSON.stringify(body ?? {}),
+  });
+}
+
+export interface BusinessTypeRow {
+  id: number;
+  name: string;
+  slug: string;
+  sort_order: number;
+  is_active: boolean;
+  requires_category: boolean;
+  requires_cuisine: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export function fetchBusinessTypes(params?: {
+  page?: number;
+  per_page?: number;
+  active_only?: boolean;
+}): Promise<Paginated<BusinessTypeRow>> {
+  const q = new URLSearchParams();
+  if (params?.page) q.set("page", String(params.page));
+  if (params?.per_page) q.set("per_page", String(params.per_page));
+  if (params?.active_only) q.set("active_only", "1");
+  const qs = q.toString();
+  return adminFetch<Paginated<BusinessTypeRow>>(`/business-types${qs ? `?${qs}` : ""}`);
+}
+
+export function createBusinessType(body: Record<string, unknown>): Promise<BusinessTypeRow> {
+  return adminFetch<BusinessTypeRow>("/business-types", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateBusinessType(id: number, body: Record<string, unknown>): Promise<BusinessTypeRow> {
+  return adminFetch<BusinessTypeRow>(`/business-types/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteBusinessType(id: number): Promise<void> {
+  return adminFetch<void>(`/business-types/${id}`, { method: "DELETE" });
+}
+
+export interface BusinessCategoryRow {
+  id: number;
+  business_type_id: number;
+  name: string;
+  sort_order: number;
+  is_active: boolean;
+  business_type?: { id: number; name: string; slug: string };
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export function fetchBusinessCategories(params?: {
+  page?: number;
+  per_page?: number;
+  business_type_id?: number;
+  active_only?: boolean;
+}): Promise<Paginated<BusinessCategoryRow>> {
+  const q = new URLSearchParams();
+  if (params?.page) q.set("page", String(params.page));
+  if (params?.per_page) q.set("per_page", String(params.per_page));
+  if (params?.business_type_id) q.set("business_type_id", String(params.business_type_id));
+  if (params?.active_only) q.set("active_only", "1");
+  const qs = q.toString();
+  return adminFetch<Paginated<BusinessCategoryRow>>(
+    `/business-categories${qs ? `?${qs}` : ""}`
+  );
+}
+
+export function createBusinessCategory(body: Record<string, unknown>): Promise<BusinessCategoryRow> {
+  return adminFetch<BusinessCategoryRow>("/business-categories", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateBusinessCategory(
+  id: number,
+  body: Record<string, unknown>
+): Promise<BusinessCategoryRow> {
+  return adminFetch<BusinessCategoryRow>(`/business-categories/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteBusinessCategory(id: number): Promise<void> {
+  return adminFetch<void>(`/business-categories/${id}`, { method: "DELETE" });
+}
+
+export interface CuisineRow {
+  id: number;
+  name: string;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export function fetchCuisines(params?: {
+  page?: number;
+  per_page?: number;
+  active_only?: boolean;
+}): Promise<Paginated<CuisineRow>> {
+  const q = new URLSearchParams();
+  if (params?.page) q.set("page", String(params.page));
+  if (params?.per_page) q.set("per_page", String(params.per_page));
+  if (params?.active_only) q.set("active_only", "1");
+  const qs = q.toString();
+  return adminFetch<Paginated<CuisineRow>>(`/cuisines${qs ? `?${qs}` : ""}`);
+}
+
+export function createCuisine(body: Record<string, unknown>): Promise<CuisineRow> {
+  return adminFetch<CuisineRow>("/cuisines", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function updateCuisine(id: number, body: Record<string, unknown>): Promise<CuisineRow> {
+  return adminFetch<CuisineRow>(`/cuisines/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+}
+
+export function deleteCuisine(id: number): Promise<void> {
+  return adminFetch<void>(`/cuisines/${id}`, { method: "DELETE" });
 }
