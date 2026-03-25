@@ -25,13 +25,13 @@ export function TopBanner() {
     <div className="relative bg-secondary text-secondary-foreground">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-2 px-4 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wide sm:gap-4 sm:text-xs">
         <Link
-          href="#"
+          href="/partner/register"
           className="rounded-full border border-white/35 px-3 py-1.5 transition hover:bg-white/10 sm:px-4"
         >
           Sign up to be a restaurant partner
         </Link>
         <Link
-          href="#"
+          href="/partner/business-account"
           className="rounded-full border border-white/35 px-3 py-1.5 transition hover:bg-white/10 sm:px-4"
         >
           Sign up for a business account
@@ -213,12 +213,17 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="#" className="transition hover:text-secondary-foreground">
+                <Link href="/partner/register" className="transition hover:text-secondary-foreground">
                   Partner with us
                 </Link>
               </li>
               <li>
-                <Link href="#" className="transition hover:text-secondary-foreground">
+                <Link href="/login" className="transition hover:text-secondary-foreground">
+                  Partner sign in
+                </Link>
+              </li>
+              <li>
+                <Link href="/rider/register" className="transition hover:text-secondary-foreground">
                   Ride with us
                 </Link>
               </li>

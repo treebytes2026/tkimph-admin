@@ -5,7 +5,7 @@ interface LoginCredentials {
   password: string;
 }
 
-interface User {
+export interface AuthUser {
   id: number;
   name: string;
   email: string;
@@ -13,7 +13,7 @@ interface User {
 }
 
 interface AuthResponse {
-  user: User;
+  user: AuthUser;
   token: string;
 }
 
@@ -46,7 +46,7 @@ export function loginAdmin(credentials: LoginCredentials): Promise<AuthResponse>
   return authRequest("/admin/login", credentials);
 }
 
-export async function getUser(): Promise<User | null> {
+export async function getUser(): Promise<AuthUser | null> {
   const token = localStorage.getItem("token");
   if (!token) return null;
 
@@ -86,7 +86,7 @@ export function getStoredToken(): string | null {
   return localStorage.getItem("token");
 }
 
-export function getStoredUser(): User | null {
+export function getStoredUser(): AuthUser | null {
   if (typeof window === "undefined") return null;
   const data = localStorage.getItem("user");
   return data ? JSON.parse(data) : null;

@@ -71,8 +71,12 @@ export function AuthModal() {
     setInfo("");
     setLoading(true);
     try {
-      await loginCustomer({ email, password });
-      router.push("/");
+      const res = await loginCustomer({ email, password });
+      if (res.user.role === "restaurant_owner") {
+        router.push("/partner/dashboard");
+      } else {
+        router.push("/");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -291,6 +295,14 @@ export function AuthModal() {
                     {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                   </button>
                 </div>
+              </div>
+              <div className="flex justify-end">
+                <Link
+                  href="/forgot-password"
+                  className="text-sm font-medium text-primary hover:underline"
+                >
+                  Forgot password?
+                </Link>
               </div>
               <Button
                 type="submit"
