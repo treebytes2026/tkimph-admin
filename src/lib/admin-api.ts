@@ -1,3 +1,4 @@
+import { ADMIN_LOGIN_PATH } from "@/lib/routes";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
 
 export class AdminApiError extends Error {
@@ -48,7 +49,7 @@ export async function adminFetch<T>(path: string, options: RequestInit = {}): Pr
     if (typeof window !== "undefined") {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
-      window.location.href = "/login";
+      window.location.href = ADMIN_LOGIN_PATH;
     }
     throw new AdminApiError("Session expired. Please sign in again.", 401);
   }
