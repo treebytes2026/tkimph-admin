@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useState } from "react";
+import { useIsClient } from "@/hooks/use-is-client";
 import { createPortal } from "react-dom";
 import { ChevronDown, ChevronUp, Clock, MapPin, X } from "lucide-react";
 import {
@@ -105,11 +106,7 @@ export function RestaurantInfoModal({
 }: RestaurantInfoModalProps) {
   const titleId = useId();
   const [hoursExpanded, setHoursExpanded] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useIsClient();
 
   useEffect(() => {
     if (!open) return;
@@ -130,7 +127,7 @@ export function RestaurantInfoModal({
   }, [open, onOpenChange]);
 
   useEffect(() => {
-    if (!open) setHoursExpanded(false);
+    if (!open) queueMicrotask(() => setHoursExpanded(false));
   }, [open]);
 
   const openStatus = useMemo(

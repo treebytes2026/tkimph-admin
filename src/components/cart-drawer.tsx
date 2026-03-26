@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
+import { useIsClient } from "@/hooks/use-is-client";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
@@ -31,16 +32,12 @@ export function CartDrawer() {
   } = useCart();
 
   const titleId = useId();
-  const [mounted, setMounted] = useState(false);
+  const mounted = useIsClient();
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
     if (!drawerOpen) {
-      setVisible(false);
+      queueMicrotask(() => setVisible(false));
       return;
     }
     const id = requestAnimationFrame(() => {

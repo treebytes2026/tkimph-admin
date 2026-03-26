@@ -119,7 +119,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const syncAuth = () => setAuthUserId(getStoredUser()?.id ?? null);
-    syncAuth();
+    queueMicrotask(syncAuth);
     window.addEventListener(AUTH_CHANGED_EVENT, syncAuth);
     window.addEventListener("storage", syncAuth);
     return () => {
@@ -132,9 +132,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
   useLayoutEffect(() => {
     if (authUserId === undefined) return;
     const saved = loadCartForAuthUserId(authUserId);
-    setCart(saved?.cart ?? []);
-    setCartRestaurant(saved?.cartRestaurant ?? null);
-    setCartHydrated(true);
+    queueMicrotask(() => {
+      setCart(saved?.cart ?? []);
+      setCartRestaurant(saved?.cartRestaurant ?? null);
+      setCartHydrated(true);
+    });
   }, [authUserId]);
 
   useEffect(() => {

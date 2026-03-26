@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { loginCustomer, type AuthUser } from "@/lib/auth";
 import { Button } from "@/components/ui/button";

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
+import { useIsClient } from "@/hooks/use-is-client";
 import { Check, MapPin, ShoppingBag } from "lucide-react";
 import { TopBanner, Navbar, Footer } from "@/components/landing";
 import { CheckoutAuthPanel } from "@/components/checkout/checkout-auth-panel";
@@ -24,11 +25,10 @@ const DELIVERY_STRIKE_PHP = 19;
 export default function CheckoutPage() {
   const { cart, cartRestaurant, cartTotal, cartCount } = useCart();
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useIsClient();
   const [deliveryMode, setDeliveryMode] = useState<"delivery" | "pickup">("delivery");
 
   useEffect(() => {
-    setMounted(true);
     const syncUser = () => setUser(getStoredUser());
     syncUser();
     window.addEventListener(AUTH_CHANGED_EVENT, syncUser);

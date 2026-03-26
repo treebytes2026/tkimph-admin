@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
+import { useIsClient } from "@/hooks/use-is-client";
 import { createPortal } from "react-dom";
 import { Minus, Plus, UtensilsCrossed, X } from "lucide-react";
 import { publicFileUrl, type PublicMenuItem } from "@/lib/public-api";
@@ -34,26 +35,24 @@ export function MenuItemModal({
   onAddToCart,
 }: MenuItemModalProps) {
   const titleId = useId();
-  const [mounted, setMounted] = useState(false);
+  const mounted = useIsClient();
   /** Keeps content mounted for exit animation after parent clears `item`. */
   const [activeItem, setActiveItem] = useState<PublicMenuItem | null>(null);
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
     if (open && item) {
-      setActiveItem(item);
-      setIsVisible(false);
+      queueMicrotask(() => {
+        setActiveItem(item);
+        setIsVisible(false);
+      });
       const id = requestAnimationFrame(() => {
         requestAnimationFrame(() => setIsVisible(true));
       });
       return () => cancelAnimationFrame(id);
     }
     if (!open) {
-      setIsVisible(false);
+      queueMicrotask(() => setIsVisible(false));
     }
   }, [open, item]);
 

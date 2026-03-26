@@ -19,7 +19,6 @@ import {
   updatePartnerRestaurant,
   uploadPartnerLocationImage,
   uploadPartnerRestaurantProfileImage,
-  type PartnerLocationImage,
   type PartnerOverviewRestaurant,
   type PartnerOverviewUser,
 } from "@/lib/partner-api";
