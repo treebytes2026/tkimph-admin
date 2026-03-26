@@ -14,6 +14,7 @@ import { ADMIN_LOGIN_PATH } from "@/lib/routes";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { LogoutConfirmDialog } from "@/components/logout-confirm-dialog";
 import { AdminNotificationBell } from "@/components/admin/admin-notification-bell";
 import { AdminRealtimeProvider, useAdminRealtime } from "@/contexts/admin-realtime-context";
 import { Separator } from "@/components/ui/separator";
@@ -208,15 +209,24 @@ function DashboardChrome({
   );
 
   const router = useRouter();
+  const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
+  const [logoutPending, setLogoutPending] = useState(false);
 
-  async function handleLogout() {
-    await logout();
-    router.push(ADMIN_LOGIN_PATH);
+  async function confirmLogout() {
+    setLogoutPending(true);
+    try {
+      await logout();
+      setLogoutDialogOpen(false);
+      router.push(ADMIN_LOGIN_PATH);
+    } finally {
+      setLogoutPending(false);
+    }
   }
 
   return (
-    <div className="flex min-h-screen bg-muted/25">
-      <aside className="hidden w-64 shrink-0 border-r border-sidebar-border/80 bg-sidebar shadow-[4px_0_24px_-12px_rgba(0,0,0,0.15)] lg:flex lg:flex-col">
+    <>
+    <div className="flex h-screen min-h-0 overflow-hidden bg-muted/25">
+      <aside className="hidden w-64 shrink-0 overflow-y-auto border-r border-sidebar-border/80 bg-sidebar shadow-[4px_0_24px_-12px_rgba(0,0,0,0.15)] lg:flex lg:flex-col">
         <SidebarContent
           pathname={pathname}
           pendingPartner={pendingPartner}
@@ -234,8 +244,8 @@ function DashboardChrome({
         </SheetContent>
       </Sheet>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-4 border-b border-border/70 bg-card/90 px-4 shadow-sm backdrop-blur-md supports-backdrop-filter:bg-card/75 lg:px-8">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="z-20 flex h-16 shrink-0 items-center justify-between gap-4 border-b border-border/70 bg-card/90 px-4 shadow-sm backdrop-blur-md supports-backdrop-filter:bg-card/75 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
               <SheetTrigger
@@ -284,7 +294,7 @@ function DashboardChrome({
                 </div>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onClick={handleLogout}
+                  onClick={() => setLogoutDialogOpen(true)}
                   className="gap-2 rounded-lg text-destructive focus:text-destructive"
                 >
                   <LogOut className="size-4" />
@@ -295,10 +305,17 @@ function DashboardChrome({
           </div>
         </header>
 
-        <main className="flex-1 overflow-x-hidden overflow-y-auto px-4 py-6 lg:px-8 lg:py-8">
+        <main className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 py-6 lg:px-8 lg:py-8">
           {children}
         </main>
       </div>
     </div>
+    <LogoutConfirmDialog
+      open={logoutDialogOpen}
+      onOpenChange={setLogoutDialogOpen}
+      onConfirm={confirmLogout}
+      pending={logoutPending}
+    />
+    </>
   );
 }

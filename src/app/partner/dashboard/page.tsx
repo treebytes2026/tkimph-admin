@@ -20,21 +20,46 @@ import {
   Clock,
   ArrowRight,
   Loader2,
+  Tags,
 } from "lucide-react";
 
 function RestaurantCard({ r }: { r: PartnerOverviewRestaurant }) {
-  const meta = [r.business_type?.name, r.business_category?.name, r.cuisine?.name]
-    .filter(Boolean)
-    .join(" · ");
+  const hasListing =
+    Boolean(r.business_type) || Boolean(r.business_category) || Boolean(r.cuisine);
 
   return (
     <Card className="border-border/80 shadow-sm transition-shadow hover:shadow-md">
       <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0 pb-2">
-        <div className="space-y-1">
+        <div className="space-y-2">
           <CardTitle className="text-xl font-bold tracking-tight">{r.name}</CardTitle>
-          <CardDescription className="line-clamp-2">
-            {meta || "Business details will appear here once configured."}
-          </CardDescription>
+          <p className="text-xs font-medium text-muted-foreground">Where you belong on TKimph</p>
+          {hasListing ? (
+            <div className="flex flex-wrap gap-2">
+              {r.cuisine ? (
+                <Badge
+                  variant="default"
+                  className="gap-1 border-0 bg-primary/90 font-medium text-primary-foreground hover:bg-primary"
+                >
+                  <UtensilsCrossed className="size-3.5 opacity-90" aria-hidden />
+                  <span className="font-semibold">Cuisine:</span> {r.cuisine.name}
+                </Badge>
+              ) : null}
+              {r.business_type ? (
+                <Badge variant="secondary" className="gap-1 font-normal">
+                  <Store className="size-3.5 opacity-80" aria-hidden />
+                  {r.business_type.name}
+                </Badge>
+              ) : null}
+              {r.business_category ? (
+                <Badge variant="outline" className="gap-1 font-normal">
+                  <Tags className="size-3.5 opacity-80" aria-hidden />
+                  {r.business_category.name}
+                </Badge>
+              ) : null}
+            </div>
+          ) : (
+            <CardDescription>Business type, category, and cuisine will show here once set.</CardDescription>
+          )}
         </div>
         <Badge
           className={
@@ -147,16 +172,14 @@ export default function PartnerDashboardHomePage() {
             </span>
             <span className="inline-flex items-center gap-2 rounded-full border border-border bg-white/60 px-4 py-2 text-sm text-muted-foreground backdrop-blur-sm dark:bg-card/60">
               <Store className="size-4 text-primary" />
-              {data.restaurants.length === 1
-                ? "1 restaurant"
-                : `${data.restaurants.length} restaurants`}
+              Partner listing
             </span>
           </div>
         </div>
       </div>
 
       <div>
-        <h2 className="mb-4 text-lg font-bold tracking-tight text-foreground">Your restaurants</h2>
+        <h2 className="mb-4 text-lg font-bold tracking-tight text-foreground">Your restaurant</h2>
         {data.restaurants.length === 0 ? (
           <Card className="border-dashed border-border/80 bg-muted/20">
             <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
@@ -173,11 +196,7 @@ export default function PartnerDashboardHomePage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-5 md:grid-cols-2">
-            {data.restaurants.map((r) => (
-              <RestaurantCard key={r.id} r={r} />
-            ))}
-          </div>
+          <RestaurantCard r={data.restaurants[0]} />
         )}
       </div>
 

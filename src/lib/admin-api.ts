@@ -480,3 +480,37 @@ export function updateCuisine(id: number, body: Record<string, unknown>): Promis
 export function deleteCuisine(id: number): Promise<void> {
   return adminFetch<void>(`/cuisines/${id}`, { method: "DELETE" });
 }
+
+export interface MenuCategoryRow {
+  id: number;
+  name: string;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export function fetchMenuCategories(params?: {
+  page?: number;
+  per_page?: number;
+  active_only?: boolean;
+}): Promise<Paginated<MenuCategoryRow>> {
+  const q = new URLSearchParams();
+  if (params?.page) q.set("page", String(params.page));
+  if (params?.per_page) q.set("per_page", String(params.per_page));
+  if (params?.active_only) q.set("active_only", "1");
+  const qs = q.toString();
+  return adminFetch<Paginated<MenuCategoryRow>>(`/menu-categories${qs ? `?${qs}` : ""}`);
+}
+
+export function createMenuCategory(body: Record<string, unknown>): Promise<MenuCategoryRow> {
+  return adminFetch<MenuCategoryRow>("/menu-categories", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function updateMenuCategory(id: number, body: Record<string, unknown>): Promise<MenuCategoryRow> {
+  return adminFetch<MenuCategoryRow>(`/menu-categories/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+}
+
+export function deleteMenuCategory(id: number): Promise<void> {
+  return adminFetch<void>(`/menu-categories/${id}`, { method: "DELETE" });
+}

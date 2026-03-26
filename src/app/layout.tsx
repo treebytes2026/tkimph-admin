@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "@/components/ui/sonner";
+import { Providers } from "./providers";
 import "./globals.css";
 
 /* Rounded, friendly geometric sans — close to foodpanda-style consumer UI */
@@ -31,7 +33,10 @@ export default function RootLayout({
       className={`${fontSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <TooltipProvider>{children}</TooltipProvider>
+        <TooltipProvider>
+          <Providers>{children}</Providers>
+          <Toaster />
+        </TooltipProvider>
       </body>
     </html>
   );

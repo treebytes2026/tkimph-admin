@@ -1,5 +1,33 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
 
+/** Laravel app base URL (no `/api`) — use for `/storage/...` so images match `NEXT_PUBLIC_API_URL`. */
+export function publicApiOrigin(): string {
+  const raw = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api").trim();
+  const noTrailing = raw.replace(/\/+$/, "");
+  if (noTrailing.endsWith("/api")) {
+    return noTrailing.slice(0, -4) || "http://127.0.0.1:8000";
+  }
+  return noTrailing || "http://127.0.0.1:8000";
+}
+
+export function publicStoragePublicUrl(storagePath: string): string {
+  let clean = storagePath.replace(/^\/+/, "");
+  if (clean.startsWith("storage/")) {
+    clean = clean.slice("storage/".length);
+  }
+  return `${publicApiOrigin()}/storage/${clean}`;
+}
+
+export function publicFileUrl(
+  path: string | null | undefined,
+  fallbackAbsoluteUrl?: string | null
+): string | null {
+  const p = path?.trim();
+  if (p) return publicStoragePublicUrl(p);
+  const u = fallbackAbsoluteUrl?.trim();
+  return u || null;
+}
+
 export class PublicApiError extends Error {
   status: number;
   body: unknown;
@@ -141,4 +169,120 @@ export function resetPasswordWithToken(payload: {
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export interface PublicCuisine {
+  id: number;
+  name: string;
+  sort_order: number;
+}
+
+/** Same shape as partner dashboard (day 0 = Sunday … 6 = Saturday). */
+export interface PublicOpeningHoursDay {
+  day: number;
+  closed: boolean;
+  open: string | null;
+  close: string | null;
+}
+
+/** Partner-uploaded location photos (public detail + modal). */
+export interface PublicLocationImage {
+  id: number;
+  path: string;
+  url: string | null;
+  sort_order: number;
+}
+
+export interface PublicRestaurant {
+  id: number;
+  name: string;
+  slug: string | null;
+  description: string | null;
+  phone?: string | null;
+  address: string | null;
+  opening_hours?: PublicOpeningHoursDay[] | null;
+  location_images?: PublicLocationImage[];
+  profile_image_path: string | null;
+  profile_image_url: string | null;
+  cuisine: { id: number; name: string } | null;
+  business_type?: { id: number; name: string } | null;
+  /** Listing UI — from API (deterministic placeholders until real metrics exist). */
+  rating?: number;
+  review_count?: number;
+  delivery_min_minutes?: number;
+  delivery_max_minutes?: number;
+  delivery_fee_php?: number;
+  free_delivery_min_spend_php?: number;
+  price_level?: number;
+  promo_label?: string | null;
+  is_ad?: boolean;
+  /** Partner menus (e.g. Pizza, rice meal) — listing “All restaurants” only. */
+  menus?: { id: number; name: string }[];
+}
+
+export interface PublicMenuItem {
+  id: number;
+  name: string;
+  description: string | null;
+  price: string;
+  image_path: string | null;
+  image_url: string | null;
+}
+
+/** One partner menu (e.g. “Lunch”, “All day”) with its dishes — not global food categories. */
+export interface PublicMenuGroup {
+  menu: { id: number; name: string; sort_order: number };
+  items: PublicMenuItem[];
+}
+
+export interface PublicRestaurantDetailResponse {
+  restaurant: PublicRestaurant;
+  menus: PublicMenuGroup[];
+}
+
+export function fetchPublicRestaurantBySlug(slug: string): Promise<PublicRestaurantDetailResponse> {
+  return publicFetch<PublicRestaurantDetailResponse>(
+    `/public/restaurants/${encodeURIComponent(slug)}`
+  );
+}
+
+export function fetchPublicCuisines(): Promise<{ data: PublicCuisine[] }> {
+  return publicFetch<{ data: PublicCuisine[] }>("/public/cuisines");
+}
+
+export interface PublicRestaurantsMeta {
+  total: number;
+  limit: number;
+}
+
+export function fetchPublicRestaurants(params?: {
+  cuisine_id?: number;
+  limit?: number;
+}): Promise<{ data: PublicRestaurant[]; meta?: PublicRestaurantsMeta }> {
+  const q = new URLSearchParams();
+  if (params?.cuisine_id != null) q.set("cuisine_id", String(params.cuisine_id));
+  if (params?.limit != null) q.set("limit", String(params.limit));
+  const qs = q.toString();
+  return publicFetch<{ data: PublicRestaurant[]; meta?: PublicRestaurantsMeta }>(
+    `/public/restaurants${qs ? `?${qs}` : ""}`
+  );
+}
+
+/** Landing “All restaurants”: each block = restaurant + full menus + dishes (same as restaurant detail). */
+export interface RestaurantWithMenusFeed {
+  restaurant: PublicRestaurant;
+  menus: PublicMenuGroup[];
+}
+
+export function fetchPublicRestaurantsMenuFeed(params?: {
+  cuisine_id?: number;
+  limit?: number;
+}): Promise<{ data: RestaurantWithMenusFeed[]; meta?: PublicRestaurantsMeta }> {
+  const q = new URLSearchParams();
+  if (params?.cuisine_id != null) q.set("cuisine_id", String(params.cuisine_id));
+  if (params?.limit != null) q.set("limit", String(params.limit));
+  const qs = q.toString();
+  return publicFetch<{ data: RestaurantWithMenusFeed[]; meta?: PublicRestaurantsMeta }>(
+    `/public/restaurants-menu-feed${qs ? `?${qs}` : ""}`
+  );
 }
