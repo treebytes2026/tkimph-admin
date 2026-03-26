@@ -1,5 +1,14 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
 
+/** Fired when token/user in localStorage change in this tab (logout, login, 401). Same-tab `storage` events do not exist in browsers. */
+export const AUTH_CHANGED_EVENT = "tkimph:auth-changed";
+
+export function notifyAuthChanged() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
+  }
+}
+
 interface LoginCredentials {
   email: string;
   password: string;
@@ -10,6 +19,7 @@ export interface AuthUser {
   name: string;
   email: string;
   role: string;
+  phone?: string | null;
 }
 
 interface AuthResponse {
@@ -35,6 +45,7 @@ async function authRequest(path: string, credentials: LoginCredentials): Promise
   const data: AuthResponse = await res.json();
   localStorage.setItem("token", data.token);
   localStorage.setItem("user", JSON.stringify(data.user));
+  notifyAuthChanged();
   return data;
 }
 
@@ -60,6 +71,7 @@ export async function getUser(): Promise<AuthUser | null> {
   if (!res.ok) {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+    notifyAuthChanged();
     return null;
   }
 
@@ -79,6 +91,7 @@ export async function logout(): Promise<void> {
   }
   localStorage.removeItem("token");
   localStorage.removeItem("user");
+  notifyAuthChanged();
 }
 
 export function getStoredToken(): string | null {

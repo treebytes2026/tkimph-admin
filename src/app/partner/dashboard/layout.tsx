@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
 import { getStoredUser, logout } from "@/lib/auth";
+import { fetchPartnerOverview, partnerPublicFileUrl } from "@/lib/partner-api";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import {
@@ -16,6 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { LogoutConfirmDialog } from "@/components/logout-confirm-dialog";
 import {
   LayoutDashboard,
   LogOut,
@@ -23,12 +25,20 @@ import {
   ChevronRight,
   UtensilsCrossed,
   Clock,
+  Store,
+  type LucideIcon,
 } from "lucide-react";
 
-const navigation = [
+const navigation: Array<{
+  name: string;
+  href: string;
+  icon: LucideIcon;
+  disabled?: boolean;
+}> = [
   { name: "Overview", href: "/partner/dashboard", icon: LayoutDashboard },
-  { name: "Menu", href: "/partner/dashboard/menu", icon: UtensilsCrossed, disabled: true },
-  { name: "Opening hours", href: "/partner/dashboard/hours", icon: Clock, disabled: true },
+  { name: "Menu", href: "/partner/dashboard/menu", icon: UtensilsCrossed },
+  { name: "Store profile", href: "/partner/dashboard/profile", icon: Store },
+  { name: "Opening hours", href: "/partner/dashboard/hours", icon: Clock },
 ];
 
 function SidebarContent({ pathname }: { pathname: string }) {
@@ -102,6 +112,9 @@ export default function PartnerDashboardLayout({ children }: { children: React.R
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [ready, setReady] = useState(false);
+  const [headerProfilePhotoSrc, setHeaderProfilePhotoSrc] = useState<string | null>(null);
+  const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
+  const [logoutPending, setLogoutPending] = useState(false);
   const user = getStoredUser();
 
   useEffect(() => {
@@ -120,9 +133,39 @@ export default function PartnerDashboardLayout({ children }: { children: React.R
     });
   }, [router]);
 
-  async function handleLogout() {
-    await logout();
-    router.push("/");
+  const refreshHeaderProfilePhoto = useCallback(() => {
+    fetchPartnerOverview()
+      .then((o) => {
+        const r = o.restaurants[0];
+        setHeaderProfilePhotoSrc(
+          r ? partnerPublicFileUrl(r.profile_image_path, r.profile_image_url) : null
+        );
+      })
+      .catch(() => setHeaderProfilePhotoSrc(null));
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    refreshHeaderProfilePhoto();
+  }, [ready, pathname, refreshHeaderProfilePhoto]);
+
+  useEffect(() => {
+    if (!ready) return;
+    const evt = "tkimph:partner-profile-photo-updated";
+    const onUpdate = () => refreshHeaderProfilePhoto();
+    window.addEventListener(evt, onUpdate);
+    return () => window.removeEventListener(evt, onUpdate);
+  }, [ready, refreshHeaderProfilePhoto]);
+
+  async function confirmLogout() {
+    setLogoutPending(true);
+    try {
+      await logout();
+      setLogoutDialogOpen(false);
+      router.push("/");
+    } finally {
+      setLogoutPending(false);
+    }
   }
 
   if (!ready || !user || user.role !== "restaurant_owner") {
@@ -152,8 +195,9 @@ export default function PartnerDashboardLayout({ children }: { children: React.R
   );
 
   return (
-    <div className="flex min-h-screen bg-muted/25">
-      <aside className="hidden w-64 shrink-0 border-r border-sidebar-border/80 bg-sidebar shadow-[4px_0_24px_-12px_rgba(0,0,0,0.15)] lg:flex lg:flex-col">
+    <>
+    <div className="flex h-screen min-h-0 overflow-hidden bg-muted/25">
+      <aside className="hidden w-64 shrink-0 overflow-y-auto border-r border-sidebar-border/80 bg-sidebar shadow-[4px_0_24px_-12px_rgba(0,0,0,0.15)] lg:flex lg:flex-col">
         <SidebarContent pathname={pathname} />
       </aside>
 
@@ -163,8 +207,8 @@ export default function PartnerDashboardLayout({ children }: { children: React.R
         </SheetContent>
       </Sheet>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-4 border-b border-border/70 bg-card/90 px-4 shadow-sm backdrop-blur-md supports-backdrop-filter:bg-card/75 lg:px-8">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="z-20 flex h-16 shrink-0 items-center justify-between gap-4 border-b border-border/70 bg-card/90 px-4 shadow-sm backdrop-blur-md supports-backdrop-filter:bg-card/75 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <Button
               type="button"
@@ -195,7 +239,10 @@ export default function PartnerDashboardLayout({ children }: { children: React.R
                 />
               }
             >
-              <Avatar className="size-9 ring-2 ring-border/60">
+              <Avatar key={headerProfilePhotoSrc ?? "fallback"} className="size-9 ring-2 ring-border/60">
+                {headerProfilePhotoSrc ? (
+                  <AvatarImage src={headerProfilePhotoSrc} alt="" className="object-cover" />
+                ) : null}
                 <AvatarFallback className="bg-primary text-sm font-bold text-primary-foreground">
                   {initials}
                 </AvatarFallback>
@@ -212,7 +259,7 @@ export default function PartnerDashboardLayout({ children }: { children: React.R
               </div>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={handleLogout}
+                onClick={() => setLogoutDialogOpen(true)}
                 className="gap-2 rounded-lg text-destructive focus:text-destructive"
               >
                 <LogOut className="size-4" />
@@ -222,8 +269,17 @@ export default function PartnerDashboardLayout({ children }: { children: React.R
           </DropdownMenu>
         </header>
 
-        <main className="flex-1 overflow-x-hidden overflow-y-auto px-4 py-6 lg:px-8 lg:py-8">{children}</main>
+        <main className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 py-6 lg:px-8 lg:py-8">
+          {children}
+        </main>
       </div>
     </div>
+    <LogoutConfirmDialog
+      open={logoutDialogOpen}
+      onOpenChange={setLogoutDialogOpen}
+      onConfirm={confirmLogout}
+      pending={logoutPending}
+    />
+    </>
   );
 }
