@@ -193,7 +193,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const clearCart = useCallback(() => {
     setCart([]);
-  }, []);
+    setCartRestaurant(null);
+    setDrawerOpen(false);
+    if (authUserId !== undefined) {
+      saveCartToStorage([], null, authUserId);
+    }
+  }, [authUserId]);
 
   const cartTotal = useMemo(
     () => cart.reduce((sum, l) => sum + parseFloat(l.item.price) * l.qty, 0),

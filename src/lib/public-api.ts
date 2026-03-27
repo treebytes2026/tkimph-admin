@@ -215,6 +215,20 @@ export interface PublicRestaurant {
   free_delivery_min_spend_php?: number;
   price_level?: number;
   promo_label?: string | null;
+  promotions?: Array<{
+    id: number;
+    code: string;
+    name: string;
+    min_spend: number;
+    discount_type: "percentage" | "fixed";
+    discount_value: number;
+    max_discount_amount: number | null;
+    stackable: boolean;
+    auto_apply: boolean;
+    first_order_only: boolean;
+    ends_at: string | null;
+    display_label: string;
+  }>;
   is_ad?: boolean;
   /** Partner menus (e.g. Pizza, rice meal) — listing “All restaurants” only. */
   menus?: { id: number; name: string }[];
@@ -227,6 +241,8 @@ export interface PublicMenuItem {
   price: string;
   image_path: string | null;
   image_url: string | null;
+  rating?: number;
+  review_count?: number;
 }
 
 /** One partner menu (e.g. “Lunch”, “All day”) with its dishes — not global food categories. */
@@ -238,6 +254,13 @@ export interface PublicMenuGroup {
 export interface PublicRestaurantDetailResponse {
   restaurant: PublicRestaurant;
   menus: PublicMenuGroup[];
+  reviews?: Array<{
+    id: number;
+    restaurant_rating: number;
+    comment: string | null;
+    customer_name: string | null;
+    created_at: string | null;
+  }>;
 }
 
 export function fetchPublicRestaurantBySlug(slug: string): Promise<PublicRestaurantDetailResponse> {

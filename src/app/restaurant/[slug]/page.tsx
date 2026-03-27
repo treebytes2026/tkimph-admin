@@ -1,8 +1,8 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TopBanner, Navbar, Footer } from "@/components/landing";
 import {
   PublicApiError,
@@ -14,6 +14,7 @@ import {
 } from "@/lib/public-api";
 import { MenuItemModal } from "@/components/menu-item-modal";
 import { RestaurantInfoModal } from "@/components/restaurant-info-modal";
+import { RestaurantReviewsModal } from "@/components/restaurant-reviews-modal";
 import { useCart } from "@/contexts/cart-context";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -39,20 +40,50 @@ import {
 
 function formatPhp(amount: string | number): string {
   const n = typeof amount === "string" ? parseFloat(amount) : amount;
-  if (Number.isNaN(n)) return "₱0.00";
-  return `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (Number.isNaN(n)) return "\u20B10.00";
+  return `\u20B1${n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 /** Spaced peso for cart summary (matches common delivery-app UI). */
 function formatPhpSpaced(amount: number): string {
-  if (Number.isNaN(amount)) return "₱ 0";
+  if (Number.isNaN(amount)) return "\u20B1 0";
   const s = amount.toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-  return `₱ ${s}`;
+  return `\u20B1 ${s}`;
+}
+
+function promoAdjustedPrice(item: PublicMenuItem, restaurant: PublicRestaurant | null): number | null {
+  const base = Number(item.price);
+  if (!Number.isFinite(base) || base <= 0 || !restaurant) return null;
+  const promos = restaurant.promotions ?? [];
+  if (promos.length === 0) return null;
+
+  const promo = promos.find((p) => p.min_spend <= base);
+  if (!promo) return null;
+
+  const raw =
+    promo.discount_type === "percentage"
+      ? base * (promo.discount_value / 100)
+      : promo.discount_value;
+  const capped = promo.max_discount_amount != null ? Math.min(raw, promo.max_discount_amount) : raw;
+  const discount = Math.max(0, Math.min(base, capped));
+  const next = Math.max(0, base - discount);
+
+  return next < base ? next : null;
 }
 
 export default function RestaurantDetailPage() {
+  return (
+    <Suspense>
+      <RestaurantDetailPageInner />
+    </Suspense>
+  );
+}
+
+function RestaurantDetailPageInner() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const slug = typeof params.slug === "string" ? params.slug : "";
+  const expedition = searchParams.get("expedition") === "pickup" ? "pickup" : "delivery";
 
   const {
     cart,
@@ -69,11 +100,13 @@ export default function RestaurantDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [restaurant, setRestaurant] = useState<PublicRestaurant | null>(null);
   const [menuGroups, setMenuGroups] = useState<PublicMenuGroup[]>([]);
+  const [reviews, setReviews] = useState<Array<{ id: number; restaurant_rating: number; comment: string | null; customer_name: string | null; created_at: string | null }>>([]);
 
   const [search, setSearch] = useState("");
   const [activeMenuId, setActiveMenuId] = useState<number | null>(null);
   const [deliveryMode, setDeliveryMode] = useState<"delivery" | "pickup">("delivery");
   const [infoModalOpen, setInfoModalOpen] = useState(false);
+  const [reviewsModalOpen, setReviewsModalOpen] = useState(false);
   const [itemModalItem, setItemModalItem] = useState<PublicMenuItem | null>(null);
   const [itemModalQty, setItemModalQty] = useState(1);
   const menuTabsRef = useRef<HTMLDivElement>(null);
@@ -89,6 +122,7 @@ export default function RestaurantDetailPage() {
         if (cancelled) return;
         setRestaurant(res.restaurant);
         setMenuGroups(res.menus);
+        setReviews(res.reviews ?? []);
         const first = res.menus[0]?.menu?.id ?? null;
         setActiveMenuId(first);
       } catch (e) {
@@ -96,6 +130,7 @@ export default function RestaurantDetailPage() {
           setError(e instanceof PublicApiError ? e.message : "Restaurant not found.");
           setRestaurant(null);
           setMenuGroups([]);
+          setReviews([]);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -161,12 +196,9 @@ export default function RestaurantDetailPage() {
     ? publicFileUrl(restaurant.profile_image_path, restaurant.profile_image_url)
     : null;
 
-  const cuisineLine = [
-    restaurant?.cuisine?.name,
-    restaurant?.business_type?.name,
-  ]
-    .filter(Boolean)
-    .join(" • ");
+  const cuisineLine = [restaurant?.cuisine?.name, restaurant?.business_type?.name].filter(Boolean).join(" | ");
+  const restaurantRating = restaurant?.rating ?? 0;
+  const restaurantReviewCount = restaurant?.review_count ?? 0;
 
   if (!slug) {
     return null;
@@ -181,7 +213,7 @@ export default function RestaurantDetailPage() {
         {loading ? (
           <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 px-4">
             <Loader2 className="size-10 animate-spin text-primary" />
-            <p className="text-sm font-medium text-muted-foreground">Loading menu…</p>
+            <p className="text-sm font-medium text-muted-foreground">Loading menu </p>
           </div>
         ) : error || !restaurant ? (
           <div className="mx-auto max-w-lg px-4 py-20 text-center">
@@ -240,9 +272,22 @@ export default function RestaurantDetailPage() {
                   <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-sm md:justify-start">
                     <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
                       <Star className="size-4 fill-current" />
-                      <span className="font-semibold text-foreground">4.8</span>
-                      <span className="text-muted-foreground">(500+)</span>
+                      <span className="font-semibold text-foreground">
+                        {restaurantReviewCount > 0
+                          ? (restaurantRating % 1 < 0.05 ? Math.round(restaurantRating).toString() : restaurantRating.toFixed(1))
+                          : "New"}
+                      </span>
+                      <span className="text-muted-foreground">
+                        ({restaurantReviewCount > 0 ? restaurantReviewCount.toLocaleString("en-PH") : "No reviews yet"})
+                      </span>
                     </span>
+                    <button
+                      type="button"
+                      onClick={() => setReviewsModalOpen(true)}
+                      className="font-semibold text-foreground underline underline-offset-2 hover:text-primary"
+                    >
+                      See reviews
+                    </button>
                     <button
                       type="button"
                       onClick={() => setInfoModalOpen(true)}
@@ -266,17 +311,33 @@ export default function RestaurantDetailPage() {
             <section className="border-b border-border/60 bg-muted/40">
               <div className="mx-auto max-w-7xl px-4 py-4">
                 <h2 className="mb-3 text-sm font-bold text-foreground">Available deals</h2>
-                <div className="flex items-center gap-4 rounded-2xl border border-border/80 bg-gradient-to-r from-secondary to-secondary/90 px-5 py-4 text-secondary-foreground shadow-sm">
-                  <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white/15">
-                    <Percent className="size-5" />
+                {restaurant.promotions && restaurant.promotions.length > 0 ? (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {restaurant.promotions.slice(0, 4).map((promo) => (
+                      <div key={promo.id} className="flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-900 shadow-sm">
+                        <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-white/70">
+                          <Percent className="size-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-bold">{promo.code} - {promo.name}</p>
+                          <p className="line-clamp-2 text-xs">{promo.display_label}</p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-bold">App-only deals</p>
-                    <p className="text-xs text-secondary-foreground/85">
-                      Download the app to unlock more discounts.
-                    </p>
+                ) : (
+                  <div className="flex items-center gap-4 rounded-2xl border border-border/80 bg-gradient-to-r from-secondary to-secondary/90 px-5 py-4 text-secondary-foreground shadow-sm">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white/15">
+                      <Percent className="size-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold">App-only deals</p>
+                      <p className="text-xs text-secondary-foreground/85">
+                        Download the app to unlock more discounts.
+                      </p>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </section>
 
@@ -408,6 +469,7 @@ export default function RestaurantDetailPage() {
                           {group.items.map((item) => {
                             const img = publicFileUrl(item.image_path, item.image_url);
                             const line = cart.find((l) => l.item.id === item.id);
+                            const adjusted = promoAdjustedPrice(item, restaurant);
                             return (
                               <article
                                 key={item.id}
@@ -426,8 +488,13 @@ export default function RestaurantDetailPage() {
                                   <h3 className="line-clamp-2 text-[15px] font-semibold leading-snug text-foreground">
                                     {item.name}
                                   </h3>
-                                  <p className="text-sm font-semibold text-primary">
-                                    from {formatPhp(item.price)}
+                                  <p className="text-sm">
+                                    <span className="font-semibold text-primary">from {formatPhp(adjusted ?? item.price)}</span>
+                                    {adjusted != null ? (
+                                      <span className="ml-2 text-xs text-muted-foreground line-through">
+                                        from {formatPhp(item.price)}
+                                      </span>
+                                    ) : null}
                                   </p>
                                   {item.description ? (
                                     <p className="line-clamp-3 text-xs leading-relaxed text-muted-foreground">
@@ -473,7 +540,7 @@ export default function RestaurantDetailPage() {
                 </div>
               </div>
 
-              {/* Cart — desktop (delivery-app style panel) */}
+              {/* Cart   desktop (delivery-app style panel) */}
               <aside className="hidden w-full max-w-[380px] shrink-0 lg:block">
                 <div className="sticky top-24">
                   <div className="flex max-h-[min(100vh-7rem,720px)] flex-col overflow-hidden rounded-2xl border border-border/80 bg-[#fafafa] shadow-sm dark:bg-card">
@@ -622,7 +689,7 @@ export default function RestaurantDetailPage() {
                             : "bg-primary text-primary-foreground hover:bg-primary/90"
                         )}
                         disabled={cart.length === 0}
-                        onClick={() => router.push("/checkout")}
+                        onClick={() => router.push(`/checkout?expedition=${expedition}`)}
                       >
                         Review payment and address
                       </Button>
@@ -651,7 +718,7 @@ export default function RestaurantDetailPage() {
                     type="button"
                     className="h-12 w-full rounded-xl text-[15px] font-semibold"
                     disabled={cart.length === 0}
-                    onClick={() => router.push("/checkout")}
+                    onClick={() => router.push(`/checkout?expedition=${expedition}`)}
                   >
                     Review payment and address
                   </Button>
@@ -678,6 +745,12 @@ export default function RestaurantDetailPage() {
               restaurant={restaurant}
               minimumOrderPeso={99}
             />
+            <RestaurantReviewsModal
+              open={reviewsModalOpen}
+              onOpenChange={setReviewsModalOpen}
+              restaurantName={restaurant.name}
+              reviews={reviews}
+            />
           </>
         )}
       </main>
@@ -686,3 +759,7 @@ export default function RestaurantDetailPage() {
     </div>
   );
 }
+
+
+
+

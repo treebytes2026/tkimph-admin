@@ -91,6 +91,12 @@ export interface PartnerOverviewRestaurant {
   phone: string | null;
   address: string | null;
   is_active: boolean;
+  operating_status: "open" | "paused" | "temporarily_closed" | "suspended";
+  operating_note: string | null;
+  paused_until: string | null;
+  publicly_orderable: boolean;
+  readiness_status: "ready" | "incomplete";
+  readiness_checks: Array<{ key: string; label: string; passed: boolean }>;
   /** Storage path on the `public` disk — prefer this with {@link partnerPublicFileUrl} for display. */
   profile_image_path: string | null;
   /** May use a different host than the app; prefer `profile_image_path` + partner URL helpers. */
@@ -105,10 +111,234 @@ export interface PartnerOverviewRestaurant {
 export interface PartnerOverviewResponse {
   user: PartnerOverviewUser;
   restaurants: PartnerOverviewRestaurant[];
+  settings: {
+    partner_self_pause_enabled: boolean;
+    partner_cancel_window_minutes: number;
+  };
 }
 
 export async function fetchPartnerOverview(): Promise<PartnerOverviewResponse> {
   return partnerRequest<PartnerOverviewResponse>("/partner/overview");
+}
+
+export interface PartnerPromotion {
+  id: number;
+  restaurant_id: number | null;
+  code: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
+  min_spend: string;
+  discount_type: "percentage" | "fixed";
+  discount_value: string;
+  max_discount_amount: string | null;
+  global_usage_limit: number | null;
+  per_user_usage_limit: number;
+  stackable: boolean;
+  auto_apply: boolean;
+  first_order_only: boolean;
+  priority: number;
+  eligible_user_ids: number[] | null;
+}
+
+export interface PartnerPromotionCreateInput {
+  code: string;
+  name: string;
+  description?: string | null;
+  is_active: boolean;
+  starts_at?: string | null;
+  ends_at?: string | null;
+  min_spend: number;
+  discount_type: "percentage" | "fixed";
+  discount_value: number;
+  max_discount_amount?: number | null;
+  global_usage_limit?: number | null;
+  per_user_usage_limit: number;
+  stackable: boolean;
+  auto_apply: boolean;
+  first_order_only: boolean;
+  priority?: number;
+  eligible_user_ids?: number[] | null;
+}
+
+export type PartnerPromotionUpdateInput = Partial<PartnerPromotionCreateInput>;
+
+export async function fetchPartnerPromotions(restaurantId: number): Promise<PartnerPromotion[]> {
+  const json = await partnerRequest<{ data: PartnerPromotion[] }>(`/partner/restaurants/${restaurantId}/promotions`);
+  return json.data;
+}
+
+export async function createPartnerPromotion(
+  restaurantId: number,
+  body: PartnerPromotionCreateInput
+): Promise<PartnerPromotion> {
+  return partnerRequest<PartnerPromotion>(`/partner/restaurants/${restaurantId}/promotions`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updatePartnerPromotion(
+  restaurantId: number,
+  promotionId: number,
+  body: PartnerPromotionUpdateInput
+): Promise<PartnerPromotion> {
+  return partnerRequest<PartnerPromotion>(`/partner/restaurants/${restaurantId}/promotions/${promotionId}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deletePartnerPromotion(restaurantId: number, promotionId: number): Promise<void> {
+  await partnerRequest<void>(`/partner/restaurants/${restaurantId}/promotions/${promotionId}`, {
+    method: "DELETE",
+  });
+}
+
+export interface PartnerOrderItem {
+  id: number;
+  menu_item_id: number | null;
+  name: string;
+  unit_price: string;
+  quantity: number;
+  line_total: string;
+}
+
+export interface PartnerOrder {
+  id: number;
+  order_number: string;
+  status: string;
+  payment_method: string;
+  payment_status: string;
+  delivery_mode: string;
+  delivery_address: string;
+  delivery_floor: string | null;
+  delivery_note: string | null;
+  location_label: string | null;
+  subtotal: string;
+  service_fee: string;
+  delivery_fee: string;
+  gross_sales: string;
+  restaurant_net: string;
+  total: string;
+  placed_at: string | null;
+  cancelled_by_role: string | null;
+  cancellation_reason: string | null;
+  cancelled_at: string | null;
+  customer: { id: number; name: string; phone: string | null } | null;
+  restaurant: { id: number; name: string } | null;
+  items: PartnerOrderItem[];
+  timeline: Array<{
+    id: number;
+    event_type: string;
+    from_status: string | null;
+    to_status: string | null;
+    note: string | null;
+    actor: { id: number; name: string; role?: string | null } | null;
+    created_at: string | null;
+  }>;
+}
+
+export interface PartnerOrdersResponse {
+  data: PartnerOrder[];
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
+}
+
+export async function fetchPartnerOrders(params?: {
+  status?: string;
+  per_page?: number;
+}): Promise<PartnerOrdersResponse> {
+  const q = new URLSearchParams();
+  if (params?.status) q.set("status", params.status);
+  if (params?.per_page) q.set("per_page", String(params.per_page));
+  const qs = q.toString();
+  return partnerRequest<PartnerOrdersResponse>(`/partner/orders${qs ? `?${qs}` : ""}`);
+}
+
+export async function updatePartnerOrderStatus(
+  orderId: number,
+  status: string,
+  reason?: string | null
+): Promise<{ message: string; order: PartnerOrder }> {
+  return partnerRequest<{ message: string; order: PartnerOrder }>(`/partner/orders/${orderId}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status, reason }),
+  });
+}
+
+export async function fetchPartnerEarnings(params?: {
+  date_from?: string;
+  date_to?: string;
+}): Promise<{
+  restaurant_id: number;
+  restaurant_name: string;
+  order_count: number;
+  gross_sales: number;
+  service_fees: number;
+  delivery_fees: number;
+  restaurant_net: number;
+  pending_settlement_amount: number;
+}> {
+  const q = new URLSearchParams();
+  if (params?.date_from) q.set("date_from", params.date_from);
+  if (params?.date_to) q.set("date_to", params.date_to);
+  const qs = q.toString();
+  return partnerRequest(`/partner/earnings${qs ? `?${qs}` : ""}`);
+}
+
+export async function fetchPartnerUnreadNotificationsCount(): Promise<{ count: number }> {
+  return partnerRequest<{ count: number }>("/partner/notifications/unread-count");
+}
+
+export async function markAllPartnerNotificationsRead(): Promise<{ message: string }> {
+  return partnerRequest<{ message: string }>("/partner/notifications/read-all", {
+    method: "POST",
+  });
+}
+
+export interface PartnerNotificationRow {
+  id: string;
+  type: string;
+  data: {
+    kind?: string;
+    message?: string;
+    order_id?: number;
+    order_number?: string;
+    total?: number;
+    placed_at?: string;
+  };
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface PartnerNotificationsResponse {
+  data: PartnerNotificationRow[];
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
+}
+
+export async function fetchPartnerNotifications(params?: {
+  page?: number;
+  per_page?: number;
+}): Promise<PartnerNotificationsResponse> {
+  const q = new URLSearchParams();
+  if (params?.page) q.set("page", String(params.page));
+  if (params?.per_page) q.set("per_page", String(params.per_page));
+  const qs = q.toString();
+  return partnerRequest<PartnerNotificationsResponse>(`/partner/notifications${qs ? `?${qs}` : ""}`);
+}
+
+export async function markPartnerNotificationRead(id: string): Promise<{ message: string }> {
+  return partnerRequest<{ message: string }>(`/partner/notifications/${id}/read`, {
+    method: "POST",
+  });
 }
 
 export async function updatePartnerProfile(body: {
@@ -132,6 +362,20 @@ export async function updatePartnerRestaurant(
   }
 ): Promise<PartnerOverviewRestaurant> {
   return partnerRequest<PartnerOverviewRestaurant>(`/partner/restaurants/${restaurantId}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updatePartnerRestaurantAvailability(
+  restaurantId: number,
+  body: {
+    operating_status: "open" | "paused";
+    operating_note?: string | null;
+    paused_until?: string | null;
+  }
+): Promise<PartnerOverviewRestaurant> {
+  return partnerRequest<PartnerOverviewRestaurant>(`/partner/restaurants/${restaurantId}/availability`, {
     method: "PATCH",
     body: JSON.stringify(body),
   });

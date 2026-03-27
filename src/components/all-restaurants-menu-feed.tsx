@@ -1,6 +1,8 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { Bike, Percent, Star, UtensilsCrossed } from "lucide-react";
 import {
   publicFileUrl,
@@ -11,10 +13,11 @@ import {
 import { cn } from "@/lib/utils";
 
 function formatPesoInt(n: number) {
-  return `₱${n.toLocaleString("en-PH")}`;
+  return `\u20B1${n.toLocaleString("en-PH")}`;
 }
 
 function formatReviews(n: number) {
+  if (n <= 0) return "0";
   if (n >= 1000) {
     return `${Math.floor(n / 1000)}k+`;
   }
@@ -23,13 +26,33 @@ function formatReviews(n: number) {
 
 function priceLevelSymbols(level: number) {
   const l = Math.min(3, Math.max(1, level));
-  return "₱".repeat(l);
+  return "\u20B1".repeat(l);
 }
 
 function formatPhp(amount: string | number): string {
   const n = typeof amount === "string" ? parseFloat(amount) : amount;
-  if (Number.isNaN(n)) return "₱0.00";
-  return `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (Number.isNaN(n)) return "\u20B10.00";
+  return `\u20B1${n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function promoAdjustedPrice(item: PublicMenuItem, restaurant: PublicRestaurant): number | null {
+  const base = Number(item.price);
+  if (!Number.isFinite(base) || base <= 0) return null;
+  const promos = restaurant.promotions ?? [];
+  if (promos.length === 0) return null;
+
+  const promo = promos.find((p) => p.min_spend <= base);
+  if (!promo) return null;
+
+  const raw =
+    promo.discount_type === "percentage"
+      ? base * (promo.discount_value / 100)
+      : promo.discount_value;
+  const capped = promo.max_discount_amount != null ? Math.min(raw, promo.max_discount_amount) : raw;
+  const discount = Math.max(0, Math.min(base, capped));
+  const next = Math.max(0, base - discount);
+
+  return next < base ? next : null;
 }
 
 type DishFeedEntry = {
@@ -49,11 +72,27 @@ function flattenToDishes(blocks: RestaurantWithMenusFeed[]): DishFeedEntry[] {
   return out;
 }
 
+function normalizeQuery(value: string): string {
+  return value.trim().toLowerCase();
+}
+
 function DishFoodpandaCard({ item, restaurant }: DishFeedEntry) {
-  const href = restaurant.slug ? `/restaurant/${encodeURIComponent(restaurant.slug)}` : null;
+  return (
+    <Suspense>
+      <DishFoodpandaCardInner item={item} restaurant={restaurant} />
+    </Suspense>
+  );
+}
+
+function DishFoodpandaCardInner({ item, restaurant }: DishFeedEntry) {
+  const searchParams = useSearchParams();
+  const expedition = searchParams.get("expedition") === "pickup" ? "pickup" : "delivery";
+  const href = restaurant.slug
+    ? `/restaurant/${encodeURIComponent(restaurant.slug)}?expedition=${expedition}`
+    : null;
   const img = publicFileUrl(item.image_path, item.image_url);
-  const rating = restaurant.rating ?? 4.5;
-  const reviews = restaurant.review_count ?? 100;
+  const rating = item.rating ?? 0;
+  const reviews = item.review_count ?? 0;
   const dMin = restaurant.delivery_min_minutes ?? 20;
   const dMax = restaurant.delivery_max_minutes ?? 40;
   const fee = restaurant.delivery_fee_php ?? 49;
@@ -62,6 +101,7 @@ function DishFoodpandaCard({ item, restaurant }: DishFeedEntry) {
   const cuisine = restaurant.cuisine?.name ?? "Food";
   const promo = restaurant.promo_label;
   const isAd = restaurant.is_ad ?? false;
+  const adjusted = promoAdjustedPrice(item, restaurant);
 
   const inner = (
     <>
@@ -95,13 +135,18 @@ function DishFoodpandaCard({ item, restaurant }: DishFeedEntry) {
           </h3>
           <div className="flex shrink-0 items-baseline gap-0.5 text-sm font-bold tabular-nums text-foreground">
             <Star className="size-4 shrink-0 fill-orange-400 text-orange-400" aria-hidden />
-            <span>{rating % 1 < 0.05 ? Math.round(rating).toString() : rating.toFixed(1)}</span>
+            <span>{reviews > 0 ? (rating % 1 < 0.05 ? Math.round(rating).toString() : rating.toFixed(1)) : "New"}</span>
             <span className="max-w-[4.5rem] truncate font-normal text-muted-foreground">
-              ({formatReviews(reviews)})
+              ({reviews > 0 ? formatReviews(reviews) : "No reviews yet"})
             </span>
           </div>
         </div>
-        <p className="mt-1 text-sm font-semibold text-primary">from {formatPhp(item.price)}</p>
+        <p className="mt-1 text-sm">
+          <span className="font-semibold text-primary">from {formatPhp(adjusted ?? item.price)}</span>
+          {adjusted != null ? (
+            <span className="ml-2 text-xs text-muted-foreground line-through">from {formatPhp(item.price)}</span>
+          ) : null}
+        </p>
         <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
           {dMin}–{dMax} min · {priceLevelSymbols(level)} · {cuisine}
         </p>
@@ -139,8 +184,19 @@ function DishFoodpandaCard({ item, restaurant }: DishFeedEntry) {
   return <article className={cardClass}>{inner}</article>;
 }
 
-export function AllRestaurantsMenuFeed({ blocks }: { blocks: RestaurantWithMenusFeed[] }) {
-  const entries = flattenToDishes(blocks);
+export function AllRestaurantsMenuFeed({
+  blocks,
+  query = "",
+}: {
+  blocks: RestaurantWithMenusFeed[];
+  query?: string;
+}) {
+  const q = normalizeQuery(query);
+  const entries = flattenToDishes(blocks).filter(({ item, restaurant }) => {
+    if (!q) return true;
+    const haystack = normalizeQuery(`${item.name} ${restaurant.name} ${restaurant.cuisine?.name ?? ""}`);
+    return haystack.includes(q);
+  });
 
   if (entries.length === 0) {
     return (

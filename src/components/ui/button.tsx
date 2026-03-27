@@ -1,5 +1,6 @@
 "use client"
 
+import React from "react"
 import { Button as ButtonPrimitive } from "@base-ui/react/button"
 import { cva, type VariantProps } from "class-variance-authority"
 
@@ -46,14 +47,30 @@ function Button({
   className,
   variant = "default",
   size = "default",
+  asChild = false,
+  children,
   ...props
-}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+}: ButtonPrimitive.Props &
+  VariantProps<typeof buttonVariants> & { asChild?: boolean }) {
+  const mergedClassName = cn(buttonVariants({ variant, size, className }))
+
+  if (asChild && React.isValidElement(children)) {
+    const child = children as React.ReactElement<{ className?: string }>
+    const childProps = child.props as { className?: string }
+    return React.cloneElement(child, {
+      ...(props as Record<string, unknown>),
+      className: cn(mergedClassName, childProps.className),
+    })
+  }
+
   return (
     <ButtonPrimitive
       data-slot="button"
-      className={cn(buttonVariants({ variant, size, className }))}
+      className={mergedClassName}
       {...props}
-    />
+    >
+      {children}
+    </ButtonPrimitive>
   )
 }
 

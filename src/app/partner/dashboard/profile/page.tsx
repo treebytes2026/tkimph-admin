@@ -32,6 +32,7 @@ import {
   KeyRound,
   Loader2,
   MapPin,
+  Navigation,
   Phone,
   Sparkles,
   Store,
@@ -56,6 +57,91 @@ const textareaClass =
 const textareaShortClass =
   "min-h-[88px] w-full resize-y rounded-xl border border-input bg-background/60 px-3.5 py-2.5 text-sm shadow-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground/80 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/45 dark:bg-input/25";
 
+type PartnerMapCoords = {
+  lat: number;
+  lon: number;
+};
+
+type PartnerGeocodeHit = {
+  lat: string;
+  lon: string;
+};
+
+type PartnerReverseGeocodeResponse = {
+  display_name?: string;
+  address?: {
+    road?: string;
+    neighbourhood?: string;
+    suburb?: string;
+    city?: string;
+    town?: string;
+    municipality?: string;
+    state?: string;
+    postcode?: string;
+    country?: string;
+  };
+};
+
+async function geocodePartnerAddress(address: string): Promise<PartnerMapCoords | null> {
+  const res = await fetch(
+    `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(address)}`,
+    { headers: { Accept: "application/json" } }
+  );
+  if (!res.ok) return null;
+  const data = (await res.json()) as PartnerGeocodeHit[];
+  if (!data[0]) return null;
+  return {
+    lat: Number(data[0].lat),
+    lon: Number(data[0].lon),
+  };
+}
+
+async function reverseGeocodePartnerAddress(lat: number, lon: number): Promise<string> {
+  const res = await fetch(
+    `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`,
+    { headers: { Accept: "application/json" } }
+  );
+  if (!res.ok) throw new Error("Could not convert your location to an address.");
+
+  const data = (await res.json()) as PartnerReverseGeocodeResponse;
+  const a = data.address;
+  const concise = [
+    a?.road,
+    a?.neighbourhood ?? a?.suburb,
+    a?.city ?? a?.town ?? a?.municipality,
+    a?.state,
+    a?.postcode,
+    a?.country,
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+  return concise || data.display_name || `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+}
+
+function getPartnerCurrentPosition(): Promise<GeolocationPosition> {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error("Geolocation is not supported in this browser."));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(resolve, reject, {
+      enableHighAccuracy: true,
+      timeout: 15000,
+      maximumAge: 0,
+    });
+  });
+}
+
+function buildPartnerMapEmbedUrl(coords: PartnerMapCoords): string {
+  const delta = 0.008;
+  const left = coords.lon - delta;
+  const right = coords.lon + delta;
+  const top = coords.lat + delta;
+  const bottom = coords.lat - delta;
+  return `https://www.openstreetmap.org/export/embed.html?bbox=${left}%2C${bottom}%2C${right}%2C${top}&layer=mapnik&marker=${coords.lat}%2C${coords.lon}`;
+}
+
 export default function PartnerProfilePage() {
   const uploadInputId = useId();
   const profilePhotoInputId = useId();
@@ -76,6 +162,10 @@ export default function PartnerProfilePage() {
   const [storeDescription, setStoreDescription] = useState("");
   const [storePhone, setStorePhone] = useState("");
   const [storeAddress, setStoreAddress] = useState("");
+  const [pickupPreviewLoading, setPickupPreviewLoading] = useState(false);
+  const [pickupPreviewCoords, setPickupPreviewCoords] = useState<PartnerMapCoords | null>(null);
+  const [pickupPreviewMessage, setPickupPreviewMessage] = useState<string | null>(null);
+  const [locatingStoreAddress, setLocatingStoreAddress] = useState(false);
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -86,6 +176,14 @@ export default function PartnerProfilePage() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [uploadingProfilePhoto, setUploadingProfilePhoto] = useState(false);
   const [deletingProfilePhoto, setDeletingProfilePhoto] = useState(false);
+
+  useEffect(() => {
+    const address = storeAddress.trim();
+    if (!address) {
+      setPickupPreviewCoords(null);
+      setPickupPreviewMessage(null);
+    }
+  }, [storeAddress]);
 
   useEffect(() => {
     let cancelled = false;
@@ -155,6 +253,61 @@ export default function PartnerProfilePage() {
       toast.error(err instanceof PartnerApiError ? err.message : "Could not save.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleRefreshPickupPreview() {
+    const address = storeAddress.trim();
+    if (!address) {
+      setPickupPreviewCoords(null);
+      setPickupPreviewMessage("Add your restaurant address first.");
+      return;
+    }
+    setPickupPreviewLoading(true);
+    setPickupPreviewMessage(null);
+    try {
+      const coords = await geocodePartnerAddress(address);
+      if (!coords) {
+        setPickupPreviewCoords(null);
+        setPickupPreviewMessage("Address not found on map. Please make it more specific.");
+        return;
+      }
+      setPickupPreviewCoords(coords);
+      setPickupPreviewMessage("Pickup map preview updated.");
+    } catch {
+      setPickupPreviewCoords(null);
+      setPickupPreviewMessage("Could not load map preview right now.");
+    } finally {
+      setPickupPreviewLoading(false);
+    }
+  }
+
+  async function handleLocateStoreAddress() {
+    setLocatingStoreAddress(true);
+    setPickupPreviewMessage(null);
+    try {
+      const pos = await getPartnerCurrentPosition();
+      const coords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+      const resolvedAddress = await reverseGeocodePartnerAddress(coords.lat, coords.lon);
+      setStoreAddress(resolvedAddress);
+      setPickupPreviewCoords(coords);
+      setPickupPreviewMessage("Location detected and map preview updated.");
+    } catch (err) {
+      if (err instanceof GeolocationPositionError) {
+        if (err.code === err.PERMISSION_DENIED) {
+          setPickupPreviewMessage("Location permission denied. Please allow location access and try again.");
+        } else if (err.code === err.POSITION_UNAVAILABLE) {
+          setPickupPreviewMessage("Unable to detect your location right now.");
+        } else if (err.code === err.TIMEOUT) {
+          setPickupPreviewMessage("Location request timed out. Please try again.");
+        } else {
+          setPickupPreviewMessage("Could not detect your location.");
+        }
+      } else {
+        setPickupPreviewMessage(err instanceof Error ? err.message : "Could not detect your location.");
+      }
+    } finally {
+      setLocatingStoreAddress(false);
     }
   }
 
@@ -585,6 +738,55 @@ export default function PartnerProfilePage() {
                       onChange={(e) => setStoreAddress(e.target.value)}
                       placeholder="Street, area, city — helps customers find you."
                     />
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="h-9 rounded-full"
+                        onClick={handleLocateStoreAddress}
+                        disabled={locatingStoreAddress}
+                      >
+                        {locatingStoreAddress ? (
+                          <Loader2 className="mr-2 size-4 animate-spin" />
+                        ) : (
+                          <Navigation className="mr-2 size-4" />
+                        )}
+                        {locatingStoreAddress ? "Locating..." : "Locate me"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-9 rounded-full"
+                        onClick={handleRefreshPickupPreview}
+                        disabled={pickupPreviewLoading}
+                      >
+                        {pickupPreviewLoading ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                        Preview pickup map
+                      </Button>
+                      <p className="text-xs text-muted-foreground">
+                        This is used for pickup discovery on the customer homepage.
+                      </p>
+                    </div>
+                    {pickupPreviewMessage ? (
+                      <p className="text-xs text-muted-foreground">{pickupPreviewMessage}</p>
+                    ) : null}
+                    <div className="overflow-hidden rounded-xl border border-border/60 bg-muted/20">
+                      <div className="aspect-[16/6]">
+                        {pickupPreviewCoords ? (
+                          <iframe
+                            title="Restaurant pickup map preview"
+                            src={buildPartnerMapEmbedUrl(pickupPreviewCoords)}
+                            className="size-full border-0"
+                            loading="lazy"
+                            referrerPolicy="no-referrer-when-downgrade"
+                          />
+                        ) : (
+                          <div className="flex size-full items-center justify-center text-xs text-muted-foreground">
+                            Pickup map preview will appear here after you enter an address.
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </CardContent>

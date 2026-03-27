@@ -20,6 +20,9 @@ export interface AuthUser {
   email: string;
   role: string;
   phone?: string | null;
+  address?: string | null;
+  email_verified?: boolean;
+  phone_verified?: boolean;
 }
 
 interface AuthResponse {

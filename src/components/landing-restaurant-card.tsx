@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { Bike, Percent, Star, Store } from "lucide-react";
 import { publicFileUrl, type PublicRestaurant } from "@/lib/public-api";
 import { cn } from "@/lib/utils";
@@ -10,6 +12,7 @@ function formatPesoInt(n: number) {
 }
 
 function formatReviews(n: number) {
+  if (n <= 0) return "0";
   if (n >= 1000) {
     return `${Math.floor(n / 1000)}k+`;
   }
@@ -29,17 +32,27 @@ export type RestaurantListingCardProps = {
   imageClassName?: string;
 };
 
-export function RestaurantListingCard({
+export function RestaurantListingCard(props: RestaurantListingCardProps) {
+  return (
+    <Suspense>
+      <RestaurantListingCardInner {...props} />
+    </Suspense>
+  );
+}
+
+function RestaurantListingCardInner({
   restaurant,
   variant = "all",
   className,
   imageClassName,
 }: RestaurantListingCardProps) {
+  const searchParams = useSearchParams();
+  const expedition = searchParams.get("expedition") === "pickup" ? "pickup" : "delivery";
   const profilePhoto = publicFileUrl(restaurant.profile_image_path, restaurant.profile_image_url);
   const photo = profilePhoto;
   const showMenuNames = variant === "all";
-  const rating = restaurant.rating ?? 4.5;
-  const reviews = restaurant.review_count ?? 100;
+  const rating = restaurant.rating ?? 0;
+  const reviews = restaurant.review_count ?? 0;
   const dMin = restaurant.delivery_min_minutes ?? 20;
   const dMax = restaurant.delivery_max_minutes ?? 40;
   const fee = restaurant.delivery_fee_php ?? 49;
@@ -49,7 +62,9 @@ export function RestaurantListingCard({
   const promo = restaurant.promo_label;
   const isAd = restaurant.is_ad ?? false;
   const menuNames = restaurant.menus?.map((m) => m.name).filter(Boolean) ?? [];
-  const detailHref = restaurant.slug ? `/restaurant/${encodeURIComponent(restaurant.slug)}` : null;
+  const detailHref = restaurant.slug
+    ? `/restaurant/${encodeURIComponent(restaurant.slug)}?expedition=${expedition}`
+    : null;
 
   const inner = (
     <>
@@ -84,9 +99,9 @@ export function RestaurantListingCard({
           </h3>
           <div className="flex shrink-0 items-baseline gap-0.5 text-sm font-bold tabular-nums text-foreground">
             <Star className="size-4 shrink-0 fill-orange-400 text-orange-400" aria-hidden />
-            <span>{rating % 1 < 0.05 ? Math.round(rating).toString() : rating.toFixed(1)}</span>
+            <span>{reviews > 0 ? (rating % 1 < 0.05 ? Math.round(rating).toString() : rating.toFixed(1)) : "New"}</span>
             <span className="max-w-[4.5rem] truncate font-normal text-muted-foreground">
-              ({formatReviews(reviews)})
+              ({reviews > 0 ? formatReviews(reviews) : "No reviews yet"})
             </span>
           </div>
         </div>

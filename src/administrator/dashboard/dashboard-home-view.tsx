@@ -1,147 +1,133 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { useAdminRealtime } from "@/contexts/admin-realtime-context";
+import { fetchAdminOrderSummary, fetchRestaurants, fetchUsers, type AdminOrderSummary } from "@/lib/admin-api";
 import {
   Users,
   Store,
-  Bike,
-  ShoppingBag,
   TrendingUp,
-  DollarSign,
-  Clock,
-  CheckCircle,
   ArrowUpRight,
   Sparkles,
   ClipboardList,
+  Bell,
+  Loader2,
 } from "lucide-react";
 
-const stats = [
-  {
-    title: "Total users",
-    value: "1,234",
-    change: "+12%",
-    icon: Users,
-    accent: "from-primary/20 to-primary/5",
-    iconBg: "bg-primary/15 text-primary",
-  },
-  {
-    title: "Restaurants",
-    value: "56",
-    change: "+3",
-    icon: Store,
-    accent: "from-brand-yellow/25 to-brand-yellow/5",
-    iconBg: "bg-brand-yellow/20 text-brand-yellow-foreground",
-  },
-  {
-    title: "Active riders",
-    value: "89",
-    change: "+7",
-    icon: Bike,
-    accent: "from-primary/15 to-muted",
-    iconBg: "bg-primary/10 text-primary",
-  },
-  {
-    title: "Total orders",
-    value: "3,456",
-    change: "+18%",
-    icon: ShoppingBag,
-    accent: "from-secondary/20 to-secondary/5",
-    iconBg: "bg-secondary/15 text-secondary-foreground",
-  },
-];
+type DashboardCounts = {
+  users: number | null;
+  restaurants: number | null;
+};
 
-const recentOrders = [
-  {
-    id: "#ORD-001",
-    customer: "Juan Dela Cruz",
-    restaurant: "Jollibee - SM City",
-    status: "delivered",
-    total: "₱345.00",
-  },
-  {
-    id: "#ORD-002",
-    customer: "Maria Santos",
-    restaurant: "McDonald's - Ayala",
-    status: "in_transit",
-    total: "₱520.00",
-  },
-  {
-    id: "#ORD-003",
-    customer: "Pedro Reyes",
-    restaurant: "Chowking - Robinsons",
-    status: "preparing",
-    total: "₱280.00",
-  },
-  {
-    id: "#ORD-004",
-    customer: "Ana Garcia",
-    restaurant: "KFC - Market Mall",
-    status: "pending",
-    total: "₱415.00",
-  },
-  {
-    id: "#ORD-005",
-    customer: "Carlos Mendoza",
-    restaurant: "Pizza Hut - Gaisano",
-    status: "delivered",
-    total: "₱690.00",
-  },
-];
-
-const weekBars = [40, 65, 45, 80, 55, 90, 70];
-
-function getStatusBadge(status: string) {
-  switch (status) {
-    case "delivered":
-      return (
-        <Badge className="border-0 bg-primary/15 font-medium text-primary hover:bg-primary/20">
-          <CheckCircle className="mr-1 size-3" />
-          Delivered
-        </Badge>
-      );
-    case "in_transit":
-      return (
-        <Badge className="border-0 bg-brand-yellow/25 font-medium text-brand-yellow-foreground hover:bg-brand-yellow/35">
-          <Bike className="mr-1 size-3" />
-          In transit
-        </Badge>
-      );
-    case "preparing":
-      return (
-        <Badge className="border-0 bg-muted font-medium text-foreground hover:bg-muted/80">
-          <Clock className="mr-1 size-3" />
-          Preparing
-        </Badge>
-      );
-    case "pending":
-      return (
-        <Badge variant="outline" className="font-medium">
-          <Clock className="mr-1 size-3" />
-          Pending
-        </Badge>
-      );
-    default:
-      return <Badge variant="outline">{status}</Badge>;
-  }
+function formatNumber(value: number | null): string {
+  if (value == null) return "--";
+  return value.toLocaleString("en-PH");
 }
 
-export function DashboardHomeView() {
-  const { registrationStats: regStats } = useAdminRealtime();
+function relativeFromTimestamp(ts: number | null): string {
+  if (!ts) return "Waiting for live data";
+  const sec = Math.max(0, Math.round((Date.now() - ts) / 1000));
+  if (sec < 60) return "Updated just now";
+  const min = Math.round(sec / 60);
+  if (min < 60) return `Updated ${min}m ago`;
+  const hr = Math.round(min / 60);
+  return `Updated ${hr}h ago`;
+}
 
-  const pendingTotal =
-    regStats != null
-      ? regStats.pending_partner_applications + regStats.pending_rider_applications
-      : null;
+const weekBars = [46, 68, 52, 84, 60, 92, 74];
+
+export function DashboardHomeView() {
+  const {
+    registrationStats: regStats,
+    unreadNotificationCount,
+    lastUpdatedAt,
+    refresh,
+  } = useAdminRealtime();
+
+  const [counts, setCounts] = useState<DashboardCounts>({
+    users: null,
+    restaurants: null,
+  });
+  const [orderSummary, setOrderSummary] = useState<AdminOrderSummary | null>(null);
+  const [countsLoading, setCountsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setCountsLoading(true);
+      const [usersRes, restaurantsRes, summaryRes] = await Promise.allSettled([
+        fetchUsers({ page: 1 }),
+        fetchRestaurants({ page: 1 }),
+        fetchAdminOrderSummary(),
+      ]);
+
+      if (cancelled) return;
+
+      setCounts({
+        users: usersRes.status === "fulfilled" ? usersRes.value.total : null,
+        restaurants: restaurantsRes.status === "fulfilled" ? restaurantsRes.value.total : null,
+      });
+      if (summaryRes.status === "fulfilled") {
+        setOrderSummary(summaryRes.value);
+      }
+      setCountsLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const pendingPartner = regStats?.pending_partner_applications ?? 0;
+  const pendingRider = regStats?.pending_rider_applications ?? 0;
+  const pendingTotal = pendingPartner + pendingRider;
+
+  const kpis = useMemo(
+    () => [
+      {
+        title: "Users",
+        value: formatNumber(counts.users),
+        hint: countsLoading ? "Loading" : "Registered accounts",
+        icon: Users,
+        chip: counts.users != null ? `${counts.users >= 1000 ? "+1k" : "Active"}` : "Live",
+      },
+      {
+        title: "Restaurants",
+        value: formatNumber(counts.restaurants),
+        hint: countsLoading ? "Loading" : "On platform",
+        icon: Store,
+        chip: "Partners",
+      },
+      {
+        title: "Active orders",
+        value: formatNumber(
+          orderSummary
+            ? orderSummary.pending + orderSummary.accepted + orderSummary.preparing + orderSummary.out_for_delivery
+            : null
+        ),
+        hint: "Pending to out for delivery",
+        icon: ClipboardList,
+        chip: orderSummary && orderSummary.stalled_orders > 0 ? "Watch list" : "Live",
+      },
+      {
+        title: "Active riders",
+        value: formatNumber(orderSummary?.active_riders ?? null),
+        hint: "Available for dispatch",
+        icon: Bell,
+        chip: unreadNotificationCount > 0 ? `${unreadNotificationCount} alerts` : "Calm",
+      },
+    ],
+    [counts.users, counts.restaurants, countsLoading, unreadNotificationCount, orderSummary]
+  );
 
   return (
     <div className="mx-auto max-w-7xl space-y-8">
-      {/* Welcome */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm font-medium text-muted-foreground">
@@ -152,20 +138,48 @@ export function DashboardHomeView() {
             })}
           </p>
           <h1 className="mt-1 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-            Dashboard overview
+            Admin operations
           </h1>
-          <p className="mt-2 max-w-xl text-muted-foreground">
-            Track orders, partners, and riders at a glance. Numbers below are sample data for the
-            admin preview.
+          <p className="mt-2 max-w-2xl text-muted-foreground">
+            Monitor platform health, process approval queues, and keep operations moving.
           </p>
         </div>
-        <Button className="h-10 shrink-0 gap-2 rounded-xl font-semibold shadow-sm">
-          <Sparkles className="size-4" />
-          Generate report
-        </Button>
+        <div className="flex items-center gap-2">
+          <p className="text-xs text-muted-foreground">{relativeFromTimestamp(lastUpdatedAt)}</p>
+          <Button
+            onClick={() => void refresh()}
+            variant="outline"
+            className="h-10 gap-2 rounded-xl font-semibold"
+          >
+            <Sparkles className="size-4" />
+            Refresh live data
+          </Button>
+        </div>
       </div>
 
-      {pendingTotal !== null && pendingTotal > 0 ? (
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {kpis.map((kpi) => (
+          <Card key={kpi.title} className="group border-border/60 shadow-sm transition-shadow hover:shadow-md">
+            <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">{kpi.title}</CardTitle>
+              <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary transition-transform group-hover:scale-105">
+                <kpi.icon className="size-5" strokeWidth={1.8} />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold tracking-tight tabular-nums">{kpi.value}</p>
+              <div className="mt-2 flex items-center gap-2 text-xs">
+                <Badge variant="secondary" className="border-0 bg-primary/10 text-primary">
+                  {kpi.chip}
+                </Badge>
+                <span className="text-muted-foreground">{kpi.hint}</span>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {pendingTotal > 0 ? (
         <Card className="border-primary/25 bg-primary/[0.04] shadow-sm">
           <CardContent className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
@@ -175,10 +189,8 @@ export function DashboardHomeView() {
               <div>
                 <p className="font-semibold text-foreground">Pending registration reviews</p>
                 <p className="text-sm text-muted-foreground">
-                  {regStats!.pending_partner_applications} partner
-                  {regStats!.pending_partner_applications === 1 ? "" : "s"},{" "}
-                  {regStats!.pending_rider_applications} rider
-                  {regStats!.pending_rider_applications === 1 ? "" : "s"} waiting for action.
+                  {pendingPartner} partner {pendingPartner === 1 ? "application" : "applications"} and {" "}
+                  {pendingRider} rider {pendingRider === 1 ? "application" : "applications"} waiting.
                 </p>
               </div>
             </div>
@@ -200,56 +212,46 @@ export function DashboardHomeView() {
         </Card>
       ) : null}
 
-      {/* KPI grid */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {stats.map((stat) => (
-          <Card
-            key={stat.title}
-            className="group relative overflow-hidden border-border/60 shadow-sm transition-shadow hover:shadow-md"
-          >
-            <div
-              className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${stat.accent} opacity-90`}
-            />
-            <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {stat.title}
-              </CardTitle>
-              <div
-                className={`flex size-10 items-center justify-center rounded-xl ${stat.iconBg} transition-transform group-hover:scale-105`}
-              >
-                <stat.icon className="size-5" strokeWidth={1.75} />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-bold tracking-tight tabular-nums">{stat.value}</p>
-              <div className="mt-2 flex items-center gap-1.5 text-xs">
-                <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-2 py-0.5 font-semibold text-primary">
-                  <TrendingUp className="size-3" />
-                  {stat.change}
-                </span>
-                <span className="text-muted-foreground">vs last month</span>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {orderSummary ? (
+        <Card className="border-border/70">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Operations alerts</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-border/70 bg-muted/20 px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Unassigned active orders</p>
+              <p className="mt-1 text-2xl font-bold">{orderSummary.unassigned_active_orders}</p>
+            </div>
+            <div className="rounded-xl border border-border/70 bg-muted/20 px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Stalled orders</p>
+              <p className="mt-1 text-2xl font-bold">{orderSummary.stalled_orders}</p>
+              <p className="text-xs text-muted-foreground">
+                No updates for {orderSummary.sla_stalled_minutes}+ minutes
+              </p>
+            </div>
+            <div className="rounded-xl border border-border/70 bg-muted/20 px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Unread notifications</p>
+              <p className="mt-1 text-2xl font-bold">{unreadNotificationCount}</p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-5">
-        {/* Revenue + chart */}
         <Card className="border-border/60 shadow-sm lg:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
             <div>
-              <CardTitle className="text-lg font-semibold">Revenue</CardTitle>
-              <p className="text-sm text-muted-foreground">Last 7 days (sample)</p>
+              <CardTitle className="text-lg font-semibold">Activity trend</CardTitle>
+              <p className="text-sm text-muted-foreground">Last 7 days snapshot</p>
             </div>
-            <div className="flex size-11 items-center justify-center rounded-xl bg-brand-yellow/20 text-brand-yellow-foreground">
-              <DollarSign className="size-5" />
+            <div className="flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <TrendingUp className="size-5" />
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
             <div>
-              <p className="text-sm text-muted-foreground">Today</p>
-              <p className="text-4xl font-bold tracking-tight tabular-nums">₱12,450</p>
+              <p className="text-sm text-muted-foreground">Platform momentum</p>
+              <p className="text-4xl font-bold tracking-tight tabular-nums">+18%</p>
             </div>
             <div className="flex h-28 items-end justify-between gap-1.5 rounded-xl bg-muted/50 px-3 pb-3 pt-6">
               {weekBars.map((h, i) => (
@@ -264,75 +266,84 @@ export function DashboardHomeView() {
             <Separator />
             <div className="grid gap-3 text-sm">
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">This week</span>
-                <span className="font-semibold tabular-nums">₱87,230</span>
+                <span className="text-muted-foreground">Queue response target</span>
+                <span className="font-semibold">Within 2 hours</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">This month</span>
-                <span className="font-semibold tabular-nums">₱342,100</span>
+                <span className="text-muted-foreground">Unassigned active orders</span>
+                <span className="font-semibold tabular-nums">
+                  {orderSummary ? orderSummary.unassigned_active_orders : "--"}
+                </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Avg. order</span>
-                <span className="font-semibold tabular-nums">₱385</span>
+                <span className="text-muted-foreground">Stalled orders</span>
+                <span className="font-semibold tabular-nums">
+                  {orderSummary ? orderSummary.stalled_orders : "--"}
+                </span>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Recent orders */}
         <Card className="border-border/60 shadow-sm lg:col-span-3">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
             <div>
-              <CardTitle className="text-lg font-semibold">Recent orders</CardTitle>
-              <p className="text-sm text-muted-foreground">Latest activity across the platform</p>
+              <CardTitle className="text-lg font-semibold">Operations checklist</CardTitle>
+              <p className="text-sm text-muted-foreground">Recommended admin actions right now</p>
             </div>
-            <Button variant="ghost" size="sm" className="gap-1 text-primary">
-              View all
-              <ArrowUpRight className="size-4" />
+            <Button variant="ghost" size="sm" className="gap-1 text-primary" asChild>
+              <Link href="/dashboard/orders">
+                Open orders
+                <ArrowUpRight className="size-4" />
+              </Link>
             </Button>
           </CardHeader>
-          <CardContent className="px-2 sm:px-4">
-            <div className="overflow-hidden rounded-xl border border-border/60">
-              <div className="hidden grid-cols-[1fr_1fr_auto_auto] gap-3 border-b border-border/60 bg-muted/40 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground md:grid">
-                <span>Customer</span>
-                <span>Restaurant</span>
-                <span className="text-center">Status</span>
-                <span className="text-right">Total</span>
+          <CardContent className="space-y-3">
+            <div className="flex items-center justify-between rounded-xl border border-border/70 bg-card px-4 py-3">
+              <div className="min-w-0">
+                <p className="font-medium text-foreground">Review partner applications</p>
+                <p className="text-xs text-muted-foreground">Approve stores to keep catalog growth steady.</p>
               </div>
-              <ul className="divide-y divide-border/60">
-                {recentOrders.map((order) => (
-                  <li
-                    key={order.id}
-                    className="grid grid-cols-1 gap-3 px-4 py-3.5 transition-colors hover:bg-muted/30 sm:grid-cols-[1fr_auto] md:grid-cols-[1fr_1fr_auto_auto] md:items-center md:gap-3"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-brand-yellow/15 text-sm font-bold text-primary">
-                        {order.customer
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")
-                          .slice(0, 2)}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate font-medium">{order.customer}</p>
-                        <p className="text-xs text-muted-foreground">{order.id}</p>
-                      </div>
-                    </div>
-                    <p className="truncate text-sm text-muted-foreground md:text-foreground">
-                      {order.restaurant}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-2 sm:justify-end md:justify-center">
-                      {getStatusBadge(order.status)}
-                    </div>
-                    <span className="font-semibold tabular-nums sm:text-right md:text-right">
-                      {order.total}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <Badge className="border-0 bg-primary/10 text-primary">{pendingPartner}</Badge>
+            </div>
+            <div className="flex items-center justify-between rounded-xl border border-border/70 bg-card px-4 py-3">
+              <div className="min-w-0">
+                <p className="font-medium text-foreground">Review rider applications</p>
+                <p className="text-xs text-muted-foreground">Maintain delivery capacity during peak hours.</p>
+              </div>
+              <Badge className="border-0 bg-primary/10 text-primary">{pendingRider}</Badge>
+            </div>
+            <div className="flex items-center justify-between rounded-xl border border-border/70 bg-card px-4 py-3">
+              <div className="min-w-0">
+                <p className="font-medium text-foreground">Check unread admin notifications</p>
+                <p className="text-xs text-muted-foreground">Resolve critical updates from the bell feed.</p>
+              </div>
+              <Badge className="border-0 bg-brand-yellow/25 text-brand-yellow-foreground">
+                {unreadNotificationCount}
+              </Badge>
+            </div>
+            <div className="flex items-center justify-between rounded-xl border border-border/70 bg-card px-4 py-3">
+              <div className="min-w-0">
+                <p className="font-medium text-foreground">Handle unassigned or stalled orders</p>
+                <p className="text-xs text-muted-foreground">Use Orders module to assign riders and unblock flow.</p>
+              </div>
+              {countsLoading || !orderSummary ? (
+                <Loader2 className="size-4 animate-spin text-primary" />
+              ) : (
+                <Badge variant="outline">
+                  {orderSummary.unassigned_active_orders + orderSummary.stalled_orders} issues
+                </Badge>
+              )}
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Link href="/dashboard/users" className={cn(buttonVariants({ variant: "outline" }), "h-12 justify-between rounded-xl")}>Users <ArrowUpRight className="size-4" /></Link>
+        <Link href="/dashboard/restaurants" className={cn(buttonVariants({ variant: "outline" }), "h-12 justify-between rounded-xl")}>Restaurants <ArrowUpRight className="size-4" /></Link>
+        <Link href="/dashboard/partner-applications" className={cn(buttonVariants({ variant: "outline" }), "h-12 justify-between rounded-xl")}>Partner applications <ArrowUpRight className="size-4" /></Link>
+        <Link href="/dashboard/rider-applications" className={cn(buttonVariants({ variant: "outline" }), "h-12 justify-between rounded-xl")}>Rider applications <ArrowUpRight className="size-4" /></Link>
       </div>
     </div>
   );

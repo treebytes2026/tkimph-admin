@@ -51,6 +51,8 @@
 }
 
 :root {
+  --font-sans: "Plus Jakarta Sans", "Segoe UI", "Noto Sans", system-ui, -apple-system, sans-serif;
+  --font-geist-mono: "JetBrains Mono", "Cascadia Code", "SFMono-Regular", Menlo, Consolas, monospace;
   /* Brand: logo-aligned green + yellow */
   --brand-yellow: oklch(0.9 0.15 102);
   --brand-yellow-foreground: oklch(0.24 0.06 145);

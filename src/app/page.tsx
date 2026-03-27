@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { TopBanner, Navbar, Footer } from "@/components/landing";
 import { AllRestaurantsMenuFeed } from "@/components/all-restaurants-menu-feed";
 import { RestaurantListingCard } from "@/components/landing-restaurant-card";
@@ -27,6 +28,7 @@ import {
   Pizza,
   Cake,
   IceCream,
+  Loader2,
   Salad,
   ChevronRight,
   SlidersHorizontal,
@@ -71,6 +73,32 @@ function applyRestaurantSort(list: PublicRestaurant[], sortBy: SortOption): Publ
     default:
       return out;
   }
+}
+
+function normalizeQuery(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+type PickupMapPoint = {
+  restaurant: PublicRestaurant;
+  lat: number | null;
+  lon: number | null;
+};
+
+type PickupGeocodeHit = {
+  lat: string;
+  lon: string;
+};
+
+async function geocodePickupAddress(address: string): Promise<{ lat: number; lon: number } | null> {
+  const res = await fetch(
+    `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(address)}`,
+    { headers: { Accept: "application/json" } }
+  );
+  if (!res.ok) return null;
+  const data = (await res.json()) as PickupGeocodeHit[];
+  if (!data[0]) return null;
+  return { lat: Number(data[0].lat), lon: Number(data[0].lon) };
 }
 
 /** Visual variety for cuisine chips (API returns names only). */
@@ -124,6 +152,16 @@ const features = [
 ];
 
 export default function Home() {
+  return (
+    <Suspense>
+      <HomeInner />
+    </Suspense>
+  );
+}
+
+function HomeInner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const cuisineScroll = useRef<HTMLDivElement>(null);
   const topRestaurantsScroll = useRef<HTMLDivElement>(null);
   const restaurantsSectionRef = useRef<HTMLElement>(null);
@@ -150,6 +188,13 @@ export default function Home() {
   const [offerVouchers, setOfferVouchers] = useState(false);
   const [offerDeals, setOfferDeals] = useState(false);
   const [sessionUser, setSessionUser] = useState<AuthUser | null>(null);
+  const [pickupMapLoading, setPickupMapLoading] = useState(false);
+  const [pickupPoints, setPickupPoints] = useState<PickupMapPoint[]>([]);
+  const [pickupRestaurants, setPickupRestaurants] = useState<PublicRestaurant[]>([]);
+  const [selectedPickupRestaurantId, setSelectedPickupRestaurantId] = useState<number | null>(null);
+  const expedition = searchParams.get("expedition") === "pickup" ? "pickup" : "delivery";
+  const searchQuery = searchParams.get("q")?.trim() ?? "";
+  const normalizedSearchQuery = normalizeQuery(searchQuery);
 
   useEffect(() => {
     const sync = () => setSessionUser(getStoredUser());
@@ -222,6 +267,82 @@ export default function Home() {
     };
   }, [selectedCuisineId]);
 
+  useEffect(() => {
+    if (expedition !== "pickup") {
+      setPickupRestaurants([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetchPublicRestaurants({ limit: 60 });
+        if (!cancelled) setPickupRestaurants(res.data);
+      } catch {
+        if (!cancelled) setPickupRestaurants([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [expedition]);
+
+  useEffect(() => {
+    if (expedition !== "pickup" || pickupRestaurants.length === 0) {
+      setPickupPoints([]);
+      setSelectedPickupRestaurantId(null);
+      setPickupMapLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      setPickupMapLoading(true);
+      try {
+        const cacheKey = "tkimph:pickup-geocode-cache:v1";
+        let cache: Record<string, { lat: number; lon: number }> = {};
+        try {
+          const raw = localStorage.getItem(cacheKey);
+          if (raw) cache = JSON.parse(raw) as Record<string, { lat: number; lon: number }>;
+        } catch {
+          cache = {};
+        }
+
+        const withAddress = pickupRestaurants.filter((r) => Boolean(r.address?.trim()));
+
+        const points: PickupMapPoint[] = [];
+        for (const restaurant of withAddress) {
+          if (cancelled) return;
+          const address = restaurant.address!.trim();
+          let coords: { lat: number; lon: number } | null = cache[address] ?? null;
+          if (!coords) {
+            coords = await geocodePickupAddress(address);
+            if (coords) cache[address] = coords;
+          }
+          points.push({
+            restaurant,
+            lat: coords?.lat ?? null,
+            lon: coords?.lon ?? null,
+          });
+        }
+
+        localStorage.setItem(cacheKey, JSON.stringify(cache));
+        if (cancelled) return;
+        setPickupPoints(points);
+        setSelectedPickupRestaurantId((prev) => {
+          if (prev != null && points.some((p) => p.restaurant.id === prev)) return prev;
+          const firstMappable = points.find((p) => p.lat != null && p.lon != null);
+          return firstMappable?.restaurant.id ?? points[0]?.restaurant.id ?? null;
+        });
+      } finally {
+        if (!cancelled) setPickupMapLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [expedition, pickupRestaurants]);
+
   /** After choosing a cuisine, scroll to the filtered results. */
   useEffect(() => {
     if (selectedCuisineId == null) return;
@@ -245,6 +366,12 @@ export default function Home() {
   }, [selectedCuisineId]);
 
   const selectedCuisine = cuisines.find((c) => c.id === selectedCuisineId);
+  const selectedPickupPoint =
+    pickupPoints.find((point) => point.restaurant.id === selectedPickupRestaurantId) ?? pickupPoints[0] ?? null;
+  const pickupMapHref =
+    selectedPickupPoint?.lat != null && selectedPickupPoint?.lon != null
+      ? `/pickup/map?expedition=pickup&lat=${selectedPickupPoint.lat}&lng=${selectedPickupPoint.lon}`
+      : "/pickup/map?expedition=pickup";
 
   const clientFilteredRestaurants = useMemo(() => {
     let list = [...restaurants];
@@ -267,8 +394,38 @@ export default function Home() {
     if (offerDeals) {
       list = list.filter((r) => r.promo_label != null && r.promo_label.length > 0);
     }
+    if (normalizedSearchQuery) {
+      const feedSearchByRestaurant = new Map<number, string>();
+      for (const block of menuFeedBlocks) {
+        const menuNames = block.menus.map((menu) => menu.menu.name).join(" ");
+        const dishNames = block.menus
+          .flatMap((menu) => menu.items.map((item) => item.name))
+          .join(" ");
+        feedSearchByRestaurant.set(
+          block.restaurant.id,
+          normalizeQuery(`${block.restaurant.name} ${menuNames} ${dishNames}`)
+        );
+      }
+
+      list = list.filter((r) => {
+        const restaurantText = normalizeQuery(
+          `${r.name} ${r.cuisine?.name ?? ""} ${(r.menus ?? []).map((m) => m.name).join(" ")}`
+        );
+        const feedText = feedSearchByRestaurant.get(r.id) ?? "";
+        return restaurantText.includes(normalizedSearchQuery) || feedText.includes(normalizedSearchQuery);
+      });
+    }
     return list;
-  }, [restaurants, ratings4Plus, superRestaurant, offerFreeDelivery, offerVouchers, offerDeals]);
+  }, [
+    restaurants,
+    ratings4Plus,
+    superRestaurant,
+    offerFreeDelivery,
+    offerVouchers,
+    offerDeals,
+    normalizedSearchQuery,
+    menuFeedBlocks,
+  ]);
 
   const displayedRestaurants = useMemo(
     () => applyRestaurantSort(clientFilteredRestaurants, sortBy),
@@ -591,6 +748,49 @@ export default function Home() {
               </div>
             </div>
 
+            {expedition === "pickup" ? (
+              <section className="pb-2 pt-8 md:pb-3 md:pt-10">
+                <div className="mb-4 flex items-end justify-between gap-4">
+                  <div>
+                    <h2 className="text-2xl font-bold tracking-tight text-foreground md:text-3xl">
+                      Pick-up map
+                    </h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      View all pickup restaurants on a full map page with multiple pins.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="default"
+                    className="rounded-xl px-4 font-semibold"
+                    onClick={() => router.push(pickupMapHref)}
+                  >
+                    Show map
+                  </Button>
+                </div>
+                <div className="rounded-2xl border border-border/70 bg-white p-4 shadow-sm">
+                  {pickupMapLoading ? (
+                    <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="size-4 animate-spin" />
+                      Preparing pickup map data...
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-sm text-muted-foreground">
+                        Restaurants with pickup:{" "}
+                        <span className="font-semibold text-foreground">{pickupPoints.length}</span>
+                      </p>
+                      {selectedPickupPoint ? (
+                        <p className="mt-2 text-sm font-medium text-foreground">
+                          Suggested area: {selectedPickupPoint.restaurant.name}
+                        </p>
+                      ) : null}
+                    </>
+                  )}
+                </div>
+              </section>
+            ) : null}
+
             {/* Cuisines — horizontal strip */}
             <section className="py-8 md:py-10">
               <div className="mb-6 flex items-end justify-between gap-4">
@@ -882,6 +1082,11 @@ export default function Home() {
                           Sort: {SORT_OPTIONS.find((o) => o.value === sortBy)?.label ?? "Relevance"}
                         </p>
                       ) : null}
+                      {!loadingRestaurants && normalizedSearchQuery ? (
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Showing results for <span className="font-semibold text-foreground">&quot;{searchQuery}&quot;</span>
+                        </p>
+                      ) : null}
                     </div>
                     {sortBy !== "relevance" ? (
                       <Button
@@ -938,7 +1143,7 @@ export default function Home() {
                       <p className="mt-1 text-sm text-muted-foreground">Refresh the page or try again later.</p>
                     </div>
                   ) : (
-                    <AllRestaurantsMenuFeed blocks={sortedMenuFeedBlocks} />
+                    <AllRestaurantsMenuFeed blocks={sortedMenuFeedBlocks} query={searchQuery} />
                   )}
                 </section>
               </div>
