@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -294,6 +294,14 @@ const serviceTabs = [
 ];
 
 export function Navbar() {
+  return (
+    <Suspense>
+      <NavbarInner />
+    </Suspense>
+  );
+}
+
+function NavbarInner() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();

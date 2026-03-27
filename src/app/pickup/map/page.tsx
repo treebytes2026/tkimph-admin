@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Footer, Navbar, TopBanner } from "@/components/landing";
 import { Button } from "@/components/ui/button";
@@ -114,6 +114,14 @@ function loadLeaflet(): Promise<void> {
 }
 
 export default function PickupMapPage() {
+  return (
+    <Suspense>
+      <PickupMapPageInner />
+    </Suspense>
+  );
+}
+
+function PickupMapPageInner() {
   const searchParams = useSearchParams();
   const initialLat = Number(searchParams.get("lat"));
   const initialLng = Number(searchParams.get("lng"));

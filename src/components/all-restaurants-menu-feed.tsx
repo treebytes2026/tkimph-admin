@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { Bike, Percent, Star, UtensilsCrossed } from "lucide-react";
 import {
   publicFileUrl,
@@ -76,6 +77,14 @@ function normalizeQuery(value: string): string {
 }
 
 function DishFoodpandaCard({ item, restaurant }: DishFeedEntry) {
+  return (
+    <Suspense>
+      <DishFoodpandaCardInner item={item} restaurant={restaurant} />
+    </Suspense>
+  );
+}
+
+function DishFoodpandaCardInner({ item, restaurant }: DishFeedEntry) {
   const searchParams = useSearchParams();
   const expedition = searchParams.get("expedition") === "pickup" ? "pickup" : "delivery";
   const href = restaurant.slug

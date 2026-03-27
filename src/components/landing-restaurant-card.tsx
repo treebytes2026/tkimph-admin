@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { Bike, Percent, Star, Store } from "lucide-react";
 import { publicFileUrl, type PublicRestaurant } from "@/lib/public-api";
 import { cn } from "@/lib/utils";
@@ -31,7 +32,15 @@ export type RestaurantListingCardProps = {
   imageClassName?: string;
 };
 
-export function RestaurantListingCard({
+export function RestaurantListingCard(props: RestaurantListingCardProps) {
+  return (
+    <Suspense>
+      <RestaurantListingCardInner {...props} />
+    </Suspense>
+  );
+}
+
+function RestaurantListingCardInner({
   restaurant,
   variant = "all",
   className,

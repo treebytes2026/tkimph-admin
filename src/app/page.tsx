@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { TopBanner, Navbar, Footer } from "@/components/landing";
 import { AllRestaurantsMenuFeed } from "@/components/all-restaurants-menu-feed";
 import { RestaurantListingCard } from "@/components/landing-restaurant-card";
@@ -152,6 +152,14 @@ const features = [
 ];
 
 export default function Home() {
+  return (
+    <Suspense>
+      <HomeInner />
+    </Suspense>
+  );
+}
+
+function HomeInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const cuisineScroll = useRef<HTMLDivElement>(null);

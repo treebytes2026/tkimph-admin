@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useIsClient } from "@/hooks/use-is-client";
 import {
   Briefcase,
@@ -206,6 +206,14 @@ function buildMapEmbedUrl(coords: MapCoords): string {
 }
 
 export default function CheckoutPage() {
+  return (
+    <Suspense>
+      <CheckoutPageInner />
+    </Suspense>
+  );
+}
+
+function CheckoutPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { cart, cartRestaurant, cartTotal, cartCount, clearCart } = useCart();

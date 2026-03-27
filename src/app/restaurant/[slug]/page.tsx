@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TopBanner, Navbar, Footer } from "@/components/landing";
 import {
   PublicApiError,
@@ -72,6 +72,14 @@ function promoAdjustedPrice(item: PublicMenuItem, restaurant: PublicRestaurant |
 }
 
 export default function RestaurantDetailPage() {
+  return (
+    <Suspense>
+      <RestaurantDetailPageInner />
+    </Suspense>
+  );
+}
+
+function RestaurantDetailPageInner() {
   const params = useParams();
   const searchParams = useSearchParams();
   const slug = typeof params.slug === "string" ? params.slug : "";
