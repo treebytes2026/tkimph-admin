@@ -32,16 +32,20 @@ export function AdminLoginForm() {
   }
 
   return (
-    <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl sm:p-8">
+    <div className="w-full max-w-md rounded-[1.5rem] border border-primary/20 bg-white/90 p-6 shadow-[0_28px_80px_-40px_rgba(28,93,55,0.55)] backdrop-blur sm:p-8">
       <div className="mb-6 flex items-center gap-3">
-        <Image src="/tkimlogo.png" alt="TKimph" width={40} height={40} className="rounded-lg" />
+        <Image src="/tkimlogo.png" alt="TKimph" width={42} height={42} className="rounded-xl ring-1 ring-primary/15" />
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Administrator
           </p>
-          <h1 className="text-xl font-bold tracking-tight text-foreground">Admin Portal Login</h1>
+          <h1 className="text-xl font-extrabold tracking-tight text-foreground">Admin Portal Login</h1>
         </div>
       </div>
+
+      <p className="mb-5 rounded-xl border border-primary/15 bg-primary/[0.04] px-3 py-2 text-xs text-foreground/80">
+        Use your authorized admin credentials to access dashboard controls.
+      </p>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {error ? (
@@ -62,7 +66,7 @@ export function AdminLoginForm() {
               placeholder="admin@example.com"
               autoComplete="email"
               required
-              className="h-11 rounded-xl pl-10"
+              className="h-11 rounded-xl border-border/80 bg-background/80 pl-10"
             />
           </div>
         </div>
@@ -79,12 +83,12 @@ export function AdminLoginForm() {
               placeholder="Enter your password"
               autoComplete="current-password"
               required
-              className="h-11 rounded-xl pl-10 pr-10"
+              className="h-11 rounded-xl border-border/80 bg-background/80 pl-10 pr-10"
             />
             <button
               type="button"
               onClick={() => setShowPassword((value) => !value)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground"
               aria-label={showPassword ? "Hide password" : "Show password"}
             >
               {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -92,7 +96,7 @@ export function AdminLoginForm() {
           </div>
         </div>
 
-        <Button type="submit" className="h-11 w-full rounded-xl font-semibold" disabled={loading}>
+        <Button type="submit" className="h-11 w-full rounded-xl font-bold shadow-sm" disabled={loading}>
           {loading ? (
             <Loader2 className="size-4 animate-spin" />
           ) : (

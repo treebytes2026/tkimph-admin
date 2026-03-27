@@ -5,7 +5,15 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
 import { getStoredUser, logout } from "@/lib/auth";
-import { fetchPartnerOverview, partnerPublicFileUrl } from "@/lib/partner-api";
+import {
+  fetchPartnerOverview,
+  fetchPartnerNotifications,
+  fetchPartnerUnreadNotificationsCount,
+  markAllPartnerNotificationsRead,
+  markPartnerNotificationRead,
+  partnerPublicFileUrl,
+  type PartnerNotificationRow,
+} from "@/lib/partner-api";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
@@ -20,14 +28,34 @@ import {
 import { LogoutConfirmDialog } from "@/components/logout-confirm-dialog";
 import {
   LayoutDashboard,
+  Bell,
   LogOut,
+  Loader2,
   Menu,
   ChevronRight,
   UtensilsCrossed,
   Clock,
+  ShoppingBag,
   Store,
+  Wallet,
+  BadgePercent,
   type LucideIcon,
 } from "lucide-react";
+
+function formatRelativeTime(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const now = Date.now();
+  const diffSec = Math.round((now - d.getTime()) / 1000);
+  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+  if (diffSec < 45) return rtf.format(-Math.max(0, diffSec), "second");
+  const diffMin = Math.round(diffSec / 60);
+  if (diffMin < 60) return rtf.format(-diffMin, "minute");
+  const diffHr = Math.round(diffMin / 60);
+  if (diffHr < 24) return rtf.format(-diffHr, "hour");
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
 
 const navigation: Array<{
   name: string;
@@ -36,12 +64,21 @@ const navigation: Array<{
   disabled?: boolean;
 }> = [
   { name: "Overview", href: "/partner/dashboard", icon: LayoutDashboard },
+  { name: "Orders", href: "/partner/dashboard/orders", icon: ShoppingBag },
   { name: "Menu", href: "/partner/dashboard/menu", icon: UtensilsCrossed },
   { name: "Store profile", href: "/partner/dashboard/profile", icon: Store },
   { name: "Opening hours", href: "/partner/dashboard/hours", icon: Clock },
+  { name: "Promotions", href: "/partner/dashboard/promotions", icon: BadgePercent },
+  { name: "Earnings", href: "/partner/dashboard/earnings", icon: Wallet },
 ];
 
-function SidebarContent({ pathname }: { pathname: string }) {
+function SidebarContent({
+  pathname,
+  unreadOrdersCount,
+}: {
+  pathname: string;
+  unreadOrdersCount: number;
+}) {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-3 px-5 py-6">
@@ -79,6 +116,11 @@ function SidebarContent({ pathname }: { pathname: string }) {
             >
               <item.icon className="size-[1.15rem] shrink-0 opacity-90" strokeWidth={2} />
               {item.name}
+              {item.href === "/partner/dashboard/orders" && unreadOrdersCount > 0 && (
+                <span className="h-5 min-w-5 rounded-full bg-brand-yellow px-1 text-center text-[10px] font-bold leading-5 text-brand-yellow-foreground shadow-sm">
+                  {unreadOrdersCount > 99 ? "99+" : unreadOrdersCount}
+                </span>
+              )}
               {isActive && !item.disabled && <ChevronRight className="ml-auto size-4 opacity-80" />}
               {item.disabled && (
                 <span className="ml-auto text-[10px] font-medium uppercase tracking-wide opacity-70">Soon</span>
@@ -113,6 +155,11 @@ export default function PartnerDashboardLayout({ children }: { children: React.R
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [ready, setReady] = useState(false);
   const [headerProfilePhotoSrc, setHeaderProfilePhotoSrc] = useState<string | null>(null);
+  const [unreadOrdersCount, setUnreadOrdersCount] = useState(0);
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [notificationsError, setNotificationsError] = useState<string | null>(null);
+  const [notifications, setNotifications] = useState<PartnerNotificationRow[]>([]);
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
   const [logoutPending, setLogoutPending] = useState(false);
   const user = getStoredUser();
@@ -157,6 +204,68 @@ export default function PartnerDashboardLayout({ children }: { children: React.R
     return () => window.removeEventListener(evt, onUpdate);
   }, [ready, refreshHeaderProfilePhoto]);
 
+  useEffect(() => {
+    if (!ready) return;
+    let cancelled = false;
+    const fetchUnread = async () => {
+      try {
+        const res = await fetchPartnerUnreadNotificationsCount();
+        if (!cancelled) setUnreadOrdersCount(res.count);
+      } catch {
+        if (!cancelled) setUnreadOrdersCount(0);
+      }
+    };
+    fetchUnread();
+    const timer = window.setInterval(fetchUnread, 8000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [ready, pathname]);
+
+  const loadNotifications = useCallback(async () => {
+    setNotificationsLoading(true);
+    setNotificationsError(null);
+    try {
+      const res = await fetchPartnerNotifications({ per_page: 12, page: 1 });
+      setNotifications(res.data);
+    } catch (error) {
+      setNotificationsError(error instanceof Error ? error.message : "Could not load notifications.");
+      setNotifications([]);
+    } finally {
+      setNotificationsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!notificationOpen) return;
+    void loadNotifications();
+  }, [notificationOpen, loadNotifications]);
+
+  async function onOpenOrderNotification(notification: PartnerNotificationRow) {
+    try {
+      if (!notification.read_at) {
+        await markPartnerNotificationRead(notification.id);
+      }
+    } catch {
+      // ignore mark-read failure and still navigate
+    } finally {
+      setNotificationOpen(false);
+      router.push("/partner/dashboard/orders");
+    }
+  }
+
+  async function onMarkAllNotificationsRead() {
+    try {
+      await markAllPartnerNotificationsRead();
+      const unread = await fetchPartnerUnreadNotificationsCount();
+      setUnreadOrdersCount(unread.count);
+      await loadNotifications();
+    } catch {
+      // ignore
+    }
+  }
+
   async function confirmLogout() {
     setLogoutPending(true);
     try {
@@ -198,12 +307,12 @@ export default function PartnerDashboardLayout({ children }: { children: React.R
     <>
     <div className="flex h-screen min-h-0 overflow-hidden bg-muted/25">
       <aside className="hidden w-64 shrink-0 overflow-y-auto border-r border-sidebar-border/80 bg-sidebar shadow-[4px_0_24px_-12px_rgba(0,0,0,0.15)] lg:flex lg:flex-col">
-        <SidebarContent pathname={pathname} />
+        <SidebarContent pathname={pathname} unreadOrdersCount={unreadOrdersCount} />
       </aside>
 
       <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
         <SheetContent side="left" className="w-64 border-sidebar-border bg-sidebar p-0">
-          <SidebarContent pathname={pathname} />
+          <SidebarContent pathname={pathname} unreadOrdersCount={unreadOrdersCount} />
         </SheetContent>
       </Sheet>
 
@@ -230,43 +339,118 @@ export default function PartnerDashboardLayout({ children }: { children: React.R
             </div>
           </div>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  className="h-auto gap-2 rounded-xl py-2 pl-2 pr-3 hover:bg-muted/80"
-                />
-              }
-            >
-              <Avatar key={headerProfilePhotoSrc ?? "fallback"} className="size-9 ring-2 ring-border/60">
-                {headerProfilePhotoSrc ? (
-                  <AvatarImage src={headerProfilePhotoSrc} alt="" className="object-cover" />
-                ) : null}
-                <AvatarFallback className="bg-primary text-sm font-bold text-primary-foreground">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-              <div className="hidden text-left sm:block">
-                <p className="max-w-[10rem] truncate text-sm font-semibold">{user.name}</p>
-                <p className="text-xs text-muted-foreground">Partner account</p>
-              </div>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52 rounded-xl">
-              <div className="px-2 py-2">
-                <p className="text-sm font-semibold">{user.name}</p>
-                <p className="truncate text-xs text-muted-foreground">{user.email}</p>
-              </div>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => setLogoutDialogOpen(true)}
-                className="gap-2 rounded-lg text-destructive focus:text-destructive"
+          <div className="flex items-center gap-2">
+            <DropdownMenu open={notificationOpen} onOpenChange={setNotificationOpen}>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="relative rounded-xl"
+                    aria-label={unreadOrdersCount > 0 ? `Notifications, ${unreadOrdersCount} unread` : "Notifications"}
+                  />
+                }
               >
-                <LogOut className="size-4" />
-                Sign out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <Bell className="size-5 text-muted-foreground" />
+                {unreadOrdersCount > 0 ? (
+                  <span className="absolute -right-0.5 -top-0.5 flex h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full bg-brand-yellow px-1 text-[10px] font-bold leading-none text-brand-yellow-foreground ring-2 ring-card">
+                    {unreadOrdersCount > 99 ? "99+" : unreadOrdersCount}
+                  </span>
+                ) : null}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[min(100vw-1.5rem,24rem)] rounded-2xl p-0">
+                <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">Notifications</p>
+                    <p className="text-xs text-muted-foreground">
+                      {unreadOrdersCount > 0 ? `${unreadOrdersCount} unread` : "All caught up"}
+                    </p>
+                  </div>
+                  {unreadOrdersCount > 0 ? (
+                    <Button type="button" variant="ghost" size="sm" onClick={() => void onMarkAllNotificationsRead()}>
+                      Mark all read
+                    </Button>
+                  ) : null}
+                </div>
+                <div className="max-h-[320px] overflow-y-auto p-1.5">
+                  {notificationsLoading ? (
+                    <div className="flex items-center justify-center gap-2 px-3 py-8 text-sm text-muted-foreground">
+                      <Loader2 className="size-4 animate-spin text-primary" />
+                      Loading...
+                    </div>
+                  ) : notificationsError ? (
+                    <p className="px-3 py-6 text-center text-sm text-destructive">{notificationsError}</p>
+                  ) : notifications.length === 0 ? (
+                    <p className="px-3 py-6 text-center text-sm text-muted-foreground">No notifications yet.</p>
+                  ) : (
+                    <ul className="space-y-1">
+                      {notifications.map((notification) => {
+                        const unread = !notification.read_at;
+                        return (
+                          <li key={notification.id}>
+                            <button
+                              type="button"
+                              onClick={() => void onOpenOrderNotification(notification)}
+                              className={`w-full rounded-xl px-3 py-2 text-left transition hover:bg-muted/70 ${
+                                unread ? "bg-primary/[0.05]" : ""
+                              }`}
+                            >
+                              <p className="text-sm font-medium text-foreground">
+                                {notification.data?.message || "New notification"}
+                              </p>
+                              <p className="mt-0.5 text-xs text-muted-foreground">
+                                {notification.data?.order_number ? `${notification.data.order_number} • ` : ""}
+                                {formatRelativeTime(notification.created_at)}
+                              </p>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    className="h-auto gap-2 rounded-xl py-2 pl-2 pr-3 hover:bg-muted/80"
+                  />
+                }
+              >
+                <Avatar key={headerProfilePhotoSrc ?? "fallback"} className="size-9 ring-2 ring-border/60">
+                  {headerProfilePhotoSrc ? (
+                    <AvatarImage src={headerProfilePhotoSrc} alt="" className="object-cover" />
+                  ) : null}
+                  <AvatarFallback className="bg-primary text-sm font-bold text-primary-foreground">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="hidden text-left sm:block">
+                  <p className="max-w-[10rem] truncate text-sm font-semibold">{user.name}</p>
+                  <p className="text-xs text-muted-foreground">Partner account</p>
+                </div>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52 rounded-xl">
+                <div className="px-2 py-2">
+                  <p className="text-sm font-semibold">{user.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => setLogoutDialogOpen(true)}
+                  className="gap-2 rounded-lg text-destructive focus:text-destructive"
+                >
+                  <LogOut className="size-4" />
+                  Sign out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </header>
 
         <main className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 py-6 lg:px-8 lg:py-8">

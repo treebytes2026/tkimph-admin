@@ -20,6 +20,12 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "TKimph Admin",
   description: "TKimph Admin Dashboard",
+  icons: {
+    icon: [
+      { url: "/tkimlogo.png?v=20260328", type: "image/png" },
+    ],
+    apple: [{ url: "/tkimlogo.png?v=20260328", type: "image/png" }],
+  },
 };
 
 export default function RootLayout({

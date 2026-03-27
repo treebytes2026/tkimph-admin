@@ -110,12 +110,28 @@ export interface AdminRestaurant {
   business_category_id: number | null;
   cuisine_id: number | null;
   is_active: boolean;
+  operating_status: "open" | "paused" | "temporarily_closed" | "suspended";
+  operating_note: string | null;
+  paused_until: string | null;
+  publicly_orderable: boolean;
+  force_publicly_orderable: boolean;
+  readiness_status: "ready" | "incomplete";
+  readiness_checks: Array<{ key: string; label: string; passed: boolean }>;
   owner: { id: number; name: string; email: string; role: string } | null;
   business_type: { id: number; name: string; slug: string } | null;
   business_category: { id: number; name: string } | null;
   cuisine: { id: number; name: string } | null;
+  support_notes?: AdminSupportNote[];
   created_at: string | null;
   updated_at: string | null;
+}
+
+export interface AdminSupportNote {
+  id: number;
+  note_type: "internal_note" | "contact_log" | "issue_tag";
+  body: string;
+  admin: { id: number; name: string; email: string } | null;
+  created_at: string | null;
 }
 
 export interface PartnerOption {
@@ -174,6 +190,66 @@ export function createRestaurant(body: Record<string, unknown>): Promise<AdminRe
 
 export function updateRestaurant(id: number, body: Record<string, unknown>): Promise<AdminRestaurant> {
   return adminFetch<AdminRestaurant>(`/restaurants/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+}
+
+export function fetchRestaurant(id: number): Promise<AdminRestaurant> {
+  return adminFetch<AdminRestaurant>(`/restaurants/${id}`);
+}
+
+export function updateRestaurantOperatingStatus(
+  id: number,
+  body: {
+    operating_status: "open" | "paused" | "temporarily_closed" | "suspended";
+    operating_note: string;
+    paused_until?: string | null;
+  }
+): Promise<AdminRestaurant> {
+  return adminFetch<AdminRestaurant>(`/restaurants/${id}/operating-status`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateRestaurantPublicOrderOverride(
+  id: number,
+  force_publicly_orderable: boolean
+): Promise<AdminRestaurant> {
+  return adminFetch<AdminRestaurant>(`/restaurants/${id}/public-order-override`, {
+    method: "PATCH",
+    body: JSON.stringify({ force_publicly_orderable }),
+  });
+}
+
+export function addRestaurantSupportNote(
+  id: number,
+  body: { note_type: AdminSupportNote["note_type"]; body: string }
+): Promise<AdminSupportNote> {
+  return adminFetch<AdminSupportNote>(`/restaurants/${id}/support-notes`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export interface AdminSettlementSummary {
+  restaurant_id: number;
+  restaurant_name: string;
+  order_count: number;
+  gross_sales: number;
+  service_fees: number;
+  delivery_fees: number;
+  restaurant_net: number;
+  pending_settlement_amount: number;
+}
+
+export function fetchRestaurantSettlementSummary(
+  id: number,
+  params?: { date_from?: string; date_to?: string }
+): Promise<AdminSettlementSummary> {
+  const q = new URLSearchParams();
+  if (params?.date_from) q.set("date_from", params.date_from);
+  if (params?.date_to) q.set("date_to", params.date_to);
+  const qs = q.toString();
+  return adminFetch<AdminSettlementSummary>(`/restaurants/${id}/settlement-summary${qs ? `?${qs}` : ""}`);
 }
 
 export function deleteRestaurant(id: number): Promise<void> {
@@ -238,6 +314,217 @@ export function markAllNotificationsRead(): Promise<void> {
   return adminFetch<void>("/notifications/read-all", {
     method: "POST",
     body: JSON.stringify({}),
+  });
+}
+
+export interface AdminOrderRow {
+  id: number;
+  order_number: string;
+  status: string;
+  gross_sales: number;
+  service_fee: number;
+  delivery_fee: number;
+  restaurant_net: number;
+  total: number;
+  delivery_mode: string;
+  delivery_address: string;
+  placed_at: string | null;
+  assigned_at: string | null;
+  cancelled_by_role: string | null;
+  cancellation_reason: string | null;
+  cancelled_at: string | null;
+  is_stalled: boolean;
+  updated_at: string | null;
+  customer: { id: number; name: string; phone: string | null; email?: string | null } | null;
+  restaurant: { id: number; name: string } | null;
+  rider: { id: number; name: string; phone: string | null } | null;
+}
+
+export interface AdminOrderNote {
+  id: number;
+  note: string;
+  admin: { id: number; name: string; email: string } | null;
+  created_at: string | null;
+}
+
+export interface AdminOrderDetail extends AdminOrderRow {
+  items: Array<{
+    id: number;
+    name: string;
+    quantity: number;
+    unit_price: number;
+    line_total: number;
+  }>;
+  notes: AdminOrderNote[];
+  timeline: Array<{
+    id: number;
+    event_type: string;
+    from_status: string | null;
+    to_status: string | null;
+    note: string | null;
+    actor: { id: number; name: string; email?: string | null; role?: string | null } | null;
+    created_at: string | null;
+  }>;
+  support_notes: AdminSupportNote[];
+}
+
+export interface AdminOrderSummary {
+  total_orders: number;
+  pending: number;
+  accepted: number;
+  preparing: number;
+  out_for_delivery: number;
+  completed: number;
+  failed: number;
+  undeliverable: number;
+  unassigned_active_orders: number;
+  stalled_orders: number;
+  active_riders: number;
+  gross_sales: number;
+  restaurant_net: number;
+  sla_stalled_minutes: number;
+}
+
+export interface AdminRiderOption {
+  id: number;
+  name: string;
+  email: string;
+  phone: string | null;
+  address: string | null;
+  is_active: boolean;
+  active_orders_count: number;
+  completed_orders_count: number;
+  created_at: string | null;
+}
+
+export interface AdminRiderDetail extends AdminRiderOption {
+  recent_orders: Array<{
+    id: number;
+    order_number: string;
+    status: string;
+    total: number;
+    placed_at: string | null;
+    customer: { id: number; name: string; phone: string | null } | null;
+    restaurant: { id: number; name: string } | null;
+  }>;
+}
+
+export interface AdminOperationalSettings {
+  order_transition_guardrails: boolean;
+  rider_auto_assignment: boolean;
+  sla_stalled_minutes: number;
+  partner_self_pause_enabled: boolean;
+  partner_cancel_window_minutes: number;
+  customer_cancel_window_minutes: number;
+}
+
+export function fetchAdminOrders(params?: {
+  page?: number;
+  per_page?: number;
+  status?: string;
+  date_from?: string;
+  date_to?: string;
+  restaurant_id?: number;
+  rider_id?: number | "unassigned";
+  search?: string;
+}): Promise<Paginated<AdminOrderRow>> {
+  const q = new URLSearchParams();
+  if (params?.page) q.set("page", String(params.page));
+  if (params?.per_page) q.set("per_page", String(params.per_page));
+  if (params?.status) q.set("status", params.status);
+  if (params?.date_from) q.set("date_from", params.date_from);
+  if (params?.date_to) q.set("date_to", params.date_to);
+  if (params?.restaurant_id != null) q.set("restaurant_id", String(params.restaurant_id));
+  if (params?.rider_id != null) q.set("rider_id", String(params.rider_id));
+  if (params?.search) q.set("search", params.search);
+  const qs = q.toString();
+  return adminFetch<Paginated<AdminOrderRow>>(`/orders${qs ? `?${qs}` : ""}`);
+}
+
+export function fetchAdminOrder(id: number): Promise<AdminOrderDetail> {
+  return adminFetch<AdminOrderDetail>(`/orders/${id}`);
+}
+
+export function updateAdminOrderStatus(
+  id: number,
+  body: { status: string; note?: string | null; cancellation_reason?: string | null }
+): Promise<{ message: string; order: AdminOrderDetail }> {
+  return adminFetch<{ message: string; order: AdminOrderDetail }>(`/orders/${id}/status`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function addAdminOrderSupportNote(
+  id: number,
+  body: { note_type: AdminSupportNote["note_type"]; body: string }
+): Promise<AdminSupportNote> {
+  return adminFetch<AdminSupportNote>(`/orders/${id}/support-notes`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function assignAdminOrderRider(
+  id: number,
+  body: { rider_id: number | null; note?: string | null }
+): Promise<{ message: string; order: AdminOrderDetail }> {
+  return adminFetch<{ message: string; order: AdminOrderDetail }>(`/orders/${id}/assign-rider`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function addAdminOrderNote(
+  id: number,
+  note: string
+): Promise<{ message: string; note: AdminOrderNote }> {
+  return adminFetch<{ message: string; note: AdminOrderNote }>(`/orders/${id}/notes`, {
+    method: "POST",
+    body: JSON.stringify({ note }),
+  });
+}
+
+export function fetchAdminOrderSummary(): Promise<AdminOrderSummary> {
+  return adminFetch<AdminOrderSummary>("/orders/summary");
+}
+
+export function fetchAdminRiders(params?: {
+  page?: number;
+  per_page?: number;
+  active?: boolean;
+  search?: string;
+}): Promise<Paginated<AdminRiderOption>> {
+  const q = new URLSearchParams();
+  if (params?.page) q.set("page", String(params.page));
+  if (params?.per_page) q.set("per_page", String(params.per_page));
+  if (params?.active != null) q.set("active", params.active ? "1" : "0");
+  if (params?.search) q.set("search", params.search);
+  const qs = q.toString();
+  return adminFetch<Paginated<AdminRiderOption>>(`/riders${qs ? `?${qs}` : ""}`);
+}
+
+export function fetchAdminRider(id: number): Promise<AdminRiderDetail> {
+  return adminFetch<AdminRiderDetail>(`/riders/${id}`);
+}
+
+export function setAdminRiderActive(id: number, is_active: boolean): Promise<AdminRiderOption> {
+  return adminFetch<AdminRiderOption>(`/riders/${id}/active`, {
+    method: "PATCH",
+    body: JSON.stringify({ is_active }),
+  });
+}
+
+export function fetchAdminSettings(): Promise<AdminOperationalSettings> {
+  return adminFetch<AdminOperationalSettings>("/settings");
+}
+
+export function updateAdminSettings(
+  body: AdminOperationalSettings
+): Promise<AdminOperationalSettings> {
+  return adminFetch<AdminOperationalSettings>("/settings", {
+    method: "PATCH",
+    body: JSON.stringify(body),
   });
 }
 
