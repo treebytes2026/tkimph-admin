@@ -55,9 +55,10 @@ function Button({
   const mergedClassName = cn(buttonVariants({ variant, size, className }))
 
   if (asChild && React.isValidElement(children)) {
-    const childProps = children.props as { className?: string }
-    return React.cloneElement(children, {
-      ...(props as object),
+    const child = children as React.ReactElement<{ className?: string }>
+    const childProps = child.props as { className?: string }
+    return React.cloneElement(child, {
+      ...(props as Record<string, unknown>),
       className: cn(mergedClassName, childProps.className),
     })
   }

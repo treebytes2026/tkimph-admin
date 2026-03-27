@@ -143,6 +143,28 @@ export interface PartnerPromotion {
   eligible_user_ids: number[] | null;
 }
 
+export interface PartnerPromotionCreateInput {
+  code: string;
+  name: string;
+  description?: string | null;
+  is_active: boolean;
+  starts_at?: string | null;
+  ends_at?: string | null;
+  min_spend: number;
+  discount_type: "percentage" | "fixed";
+  discount_value: number;
+  max_discount_amount?: number | null;
+  global_usage_limit?: number | null;
+  per_user_usage_limit: number;
+  stackable: boolean;
+  auto_apply: boolean;
+  first_order_only: boolean;
+  priority?: number;
+  eligible_user_ids?: number[] | null;
+}
+
+export type PartnerPromotionUpdateInput = Partial<PartnerPromotionCreateInput>;
+
 export async function fetchPartnerPromotions(restaurantId: number): Promise<PartnerPromotion[]> {
   const json = await partnerRequest<{ data: PartnerPromotion[] }>(`/partner/restaurants/${restaurantId}/promotions`);
   return json.data;
@@ -150,18 +172,7 @@ export async function fetchPartnerPromotions(restaurantId: number): Promise<Part
 
 export async function createPartnerPromotion(
   restaurantId: number,
-  body: Partial<PartnerPromotion> & {
-    code: string;
-    name: string;
-    is_active: boolean;
-    min_spend: number;
-    discount_type: "percentage" | "fixed";
-    discount_value: number;
-    per_user_usage_limit: number;
-    stackable: boolean;
-    auto_apply: boolean;
-    first_order_only: boolean;
-  }
+  body: PartnerPromotionCreateInput
 ): Promise<PartnerPromotion> {
   return partnerRequest<PartnerPromotion>(`/partner/restaurants/${restaurantId}/promotions`, {
     method: "POST",
@@ -172,7 +183,7 @@ export async function createPartnerPromotion(
 export async function updatePartnerPromotion(
   restaurantId: number,
   promotionId: number,
-  body: Partial<PartnerPromotion>
+  body: PartnerPromotionUpdateInput
 ): Promise<PartnerPromotion> {
   return partnerRequest<PartnerPromotion>(`/partner/restaurants/${restaurantId}/promotions/${promotionId}`, {
     method: "PATCH",

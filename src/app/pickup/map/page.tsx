@@ -61,6 +61,11 @@ type PickupPoint = {
   lon: number | null;
 };
 
+type MappablePickupPoint = PickupPoint & {
+  lat: number;
+  lon: number;
+};
+
 function formatReviews(n: number) {
   if (n >= 1000) return `${Math.floor(n / 1000)}k+`;
   return String(n);
@@ -158,7 +163,10 @@ export default function PickupMapPage() {
   }, [points, mappedOnly, selectedCuisineId, searchText]);
 
   const mappablePoints = useMemo(
-    () => filteredPoints.filter((point) => point.lat != null && point.lon != null),
+    () =>
+      filteredPoints.filter(
+        (point): point is MappablePickupPoint => point.lat != null && point.lon != null
+      ),
     [filteredPoints]
   );
   const selectedPoint =
@@ -189,7 +197,7 @@ export default function PickupMapPage() {
         for (const restaurant of restaurants) {
           if (cancelled) return;
           const address = restaurant.address!.trim();
-          let coords = cache[address] ?? null;
+          let coords: { lat: number; lon: number } | null = cache[address] ?? null;
           if (!coords) {
             coords = await geocodeAddress(address);
             if (coords) cache[address] = coords;
@@ -244,11 +252,11 @@ export default function PickupMapPage() {
         if (cancelled || !mapRef.current || !window.L) return;
 
         const L = window.L;
-        const defaultCenter =
+        const defaultCenter: [number, number] =
           !Number.isNaN(initialLat) && !Number.isNaN(initialLng)
             ? [initialLat, initialLng]
             : mappablePoints[0]
-              ? [mappablePoints[0].lat!, mappablePoints[0].lon!]
+              ? [mappablePoints[0].lat, mappablePoints[0].lon]
               : [14.5995, 120.9842];
 
         if (!mapInstanceRef.current) {
@@ -279,11 +287,11 @@ export default function PickupMapPage() {
 
         if (mappablePoints.length > 1) {
           const bounds = L.latLngBounds(
-            mappablePoints.map((p) => [p.lat as number, p.lon as number])
+            mappablePoints.map((p): [number, number] => [p.lat, p.lon])
           );
           map.fitBounds(bounds, { padding: [40, 40] });
         } else if (mappablePoints[0]) {
-          map.setView([mappablePoints[0].lat!, mappablePoints[0].lon!], 14);
+          map.setView([mappablePoints[0].lat, mappablePoints[0].lon], 14);
         }
       } catch (err) {
         if (!cancelled) {

@@ -129,6 +129,7 @@ export default function OrdersPage() {
 
   useEffect(() => {
     if (!userId) return;
+    const activeUserId = userId;
     let cancelled = false;
 
     async function loadOrders(initial = false) {
@@ -144,7 +145,7 @@ export default function OrdersPage() {
           const id = String(order.id);
           nextSnapshot[id] = order.status;
         }
-        localStorage.setItem(statusSnapshotKey(userId), JSON.stringify(nextSnapshot));
+        localStorage.setItem(statusSnapshotKey(activeUserId), JSON.stringify(nextSnapshot));
       } catch (err) {
         if (cancelled) return;
         if (err instanceof CustomerApiError && err.status === 401) {

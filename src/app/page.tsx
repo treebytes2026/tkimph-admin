@@ -305,7 +305,7 @@ export default function Home() {
         for (const restaurant of withAddress) {
           if (cancelled) return;
           const address = restaurant.address!.trim();
-          let coords = cache[address] ?? null;
+          let coords: { lat: number; lon: number } | null = cache[address] ?? null;
           if (!coords) {
             coords = await geocodePickupAddress(address);
             if (coords) cache[address] = coords;
