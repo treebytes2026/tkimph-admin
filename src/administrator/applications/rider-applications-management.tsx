@@ -286,6 +286,22 @@ export function RiderApplicationsManagement() {
                     <span className="text-muted-foreground">License:</span> {detail.license_number}
                   </p>
                 ) : null}
+                {detail.id_document_signed_url ? (
+                  <p>
+                    <span className="text-muted-foreground">Government ID:</span>{" "}
+                    <a href={detail.id_document_signed_url} target="_blank" rel="noreferrer" className="text-primary underline">
+                      Open document
+                    </a>
+                  </p>
+                ) : null}
+                {detail.license_document_signed_url ? (
+                  <p>
+                    <span className="text-muted-foreground">License photo:</span>{" "}
+                    <a href={detail.license_document_signed_url} target="_blank" rel="noreferrer" className="text-primary underline">
+                      Open document
+                    </a>
+                  </p>
+                ) : null}
                 {detail.notes ? (
                   <p>
                     <span className="text-muted-foreground">Notes:</span> {detail.notes}

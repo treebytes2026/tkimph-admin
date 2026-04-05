@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Pusher from "pusher-js";
 import { Footer, Navbar, TopBanner } from "@/components/landing";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCart } from "@/contexts/cart-context";
-import { AUTH_CHANGED_EVENT, getStoredUser, type AuthUser } from "@/lib/auth";
+import { AUTH_CHANGED_EVENT, getStoredToken, getStoredUser, type AuthUser } from "@/lib/auth";
 import {
   CustomerApiError,
   createCustomerOrderIssue,
@@ -17,6 +18,21 @@ import {
   type CustomerOrder,
 } from "@/lib/customer-api";
 import { publicFileUrl, type PublicMenuItem, type PublicRestaurant } from "@/lib/public-api";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
+const API_BASE_URL = API_URL.replace(/\/api\/?$/, "");
+const DEFAULT_REVERB_HOST = (() => {
+  try {
+    return new URL(API_BASE_URL).hostname;
+  } catch {
+    return "127.0.0.1";
+  }
+})();
+const REVERB_APP_KEY = process.env.NEXT_PUBLIC_REVERB_APP_KEY || "local";
+const REVERB_HOST = process.env.NEXT_PUBLIC_REVERB_HOST || DEFAULT_REVERB_HOST;
+const REVERB_PORT = Number(process.env.NEXT_PUBLIC_REVERB_PORT || 8080);
+const REVERB_SCHEME = process.env.NEXT_PUBLIC_REVERB_SCHEME || "http";
+const REVERB_CLUSTER = process.env.NEXT_PUBLIC_REVERB_CLUSTER || "mt1";
 
 function formatPhp(amount: number): string {
   return `PHP ${amount.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -115,6 +131,10 @@ export default function OrdersPage() {
         router.replace("/dashboard");
         return;
       }
+      if (u.role === "rider") {
+        router.replace("/rider/dashboard");
+        return;
+      }
       setUser(u);
     };
 
@@ -129,8 +149,11 @@ export default function OrdersPage() {
 
   useEffect(() => {
     if (!userId) return;
+    const token = getStoredToken();
+    if (!token) return;
     const activeUserId = userId;
     let cancelled = false;
+    let refreshTimer: number | null = null;
 
     async function loadOrders(initial = false) {
       if (initial) setOrdersLoading(true);
@@ -157,14 +180,43 @@ export default function OrdersPage() {
       }
     }
 
+    const pusher = new Pusher(REVERB_APP_KEY, {
+      cluster: REVERB_CLUSTER,
+      wsHost: REVERB_HOST,
+      wsPort: REVERB_PORT,
+      wssPort: REVERB_PORT,
+      forceTLS: REVERB_SCHEME === "https",
+      enabledTransports: REVERB_SCHEME === "https" ? ["wss"] : ["ws", "wss"],
+      channelAuthorization: {
+        endpoint: `${API_URL}/broadcasting/auth`,
+        transport: "ajax",
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    });
+
+    const scheduleRefresh = () => {
+      if (cancelled || refreshTimer !== null) return;
+      refreshTimer = window.setTimeout(() => {
+        refreshTimer = null;
+        void loadOrders(false);
+      }, 120);
+    };
+
+    const customerChannel = pusher.subscribe(`private-customer.${activeUserId}`);
+    customerChannel.bind("customer.order.updated", scheduleRefresh);
+    pusher.connection.bind("connected", scheduleRefresh);
+
     void loadOrders(true);
-    const interval = window.setInterval(() => {
-      void loadOrders(false);
-    }, 10000);
 
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
+      if (refreshTimer !== null) window.clearTimeout(refreshTimer);
+      customerChannel.unbind("customer.order.updated", scheduleRefresh);
+      pusher.unsubscribe(`private-customer.${activeUserId}`);
+      pusher.disconnect();
     };
   }, [userId, router]);
 
@@ -359,7 +411,7 @@ export default function OrdersPage() {
         <Card>
           <CardHeader>
             <CardTitle>Order history</CardTitle>
-            <CardDescription>Latest updates refresh automatically.</CardDescription>
+            <CardDescription>Latest updates stream in real-time.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {ordersLoading ? (
@@ -560,6 +612,13 @@ export default function OrdersPage() {
                           </div>
                         </div>
                       ) : null}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => router.push(`/orders/${order.id}/track`)}
+                      >
+                        Track order
+                      </Button>
                       <Button
                         type="button"
                         variant="outline"

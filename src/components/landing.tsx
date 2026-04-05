@@ -29,7 +29,12 @@ import {
 } from "lucide-react";
 import { useCart } from "@/contexts/cart-context";
 import { AUTH_CHANGED_EVENT, getStoredUser, logout, notifyAuthChanged, type AuthUser } from "@/lib/auth";
-import { fetchCustomerOrders, fetchCustomerProfile, updateCustomerProfile } from "@/lib/customer-api";
+import {
+  fetchCustomerOrders,
+  fetchCustomerProfile,
+  submitCustomerHelpCenterConcern,
+  updateCustomerProfile,
+} from "@/lib/customer-api";
 import {
   fetchPublicCuisines,
   fetchPublicRestaurants,
@@ -326,6 +331,11 @@ function NavbarInner() {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searchSuggestions, setSearchSuggestions] = useState<SearchSuggestion[]>([]);
   const [searchPopularity, setSearchPopularity] = useState<SearchPopularityData>({ global: {}, contexts: {} });
+  const [helpCenterOpen, setHelpCenterOpen] = useState(false);
+  const [helpSubject, setHelpSubject] = useState("");
+  const [helpMessage, setHelpMessage] = useState("");
+  const [helpSubmitting, setHelpSubmitting] = useState(false);
+  const [helpFeedback, setHelpFeedback] = useState<string | null>(null);
 
   function statusSnapshotKey(id: number): string {
     return `tkimph:orders:status-snapshot:${id}`;
@@ -518,6 +528,39 @@ function NavbarInner() {
       window.dispatchEvent(new Event("tkimph:orders-unread-cleared"));
     }
     router.push("/orders");
+  }
+
+  function openHelpCenter() {
+    if (!user) {
+      router.push("/login");
+      return;
+    }
+    setHelpFeedback(null);
+    setHelpSubject("");
+    setHelpMessage("");
+    setHelpCenterOpen(true);
+  }
+
+  async function submitHelpCenterConcern() {
+    const subject = helpSubject.trim();
+    const message = helpMessage.trim();
+    if (!subject || !message) {
+      setHelpFeedback("Please add both a subject and message.");
+      return;
+    }
+
+    setHelpSubmitting(true);
+    setHelpFeedback(null);
+    try {
+      const res = await submitCustomerHelpCenterConcern({ subject, message });
+      setHelpFeedback(res.message || "Concern sent to admin support.");
+      setHelpSubject("");
+      setHelpMessage("");
+    } catch (err) {
+      setHelpFeedback(err instanceof Error ? err.message : "Could not send your concern.");
+    } finally {
+      setHelpSubmitting(false);
+    }
   }
 
   function handleServiceTabClick(label: string) {
@@ -772,7 +815,7 @@ function NavbarInner() {
                     <span>Vouchers & offers</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem className="gap-2 cursor-pointer">
+                  <DropdownMenuItem className="gap-2 cursor-pointer" onClick={openHelpCenter}>
                     <HelpCircle className="size-4" />
                     <span>Help center</span>
                   </DropdownMenuItem>
@@ -1004,6 +1047,46 @@ function NavbarInner() {
       onConfirm={confirmLogout}
       pending={logoutPending}
     />
+    {helpCenterOpen ? (
+      <div className="fixed inset-0 z-[72] bg-black/35 px-4 pt-24" onClick={() => setHelpCenterOpen(false)}>
+        <div
+          className="mx-auto w-full max-w-2xl rounded-2xl border border-border bg-white p-4 shadow-xl sm:p-5"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="mb-3 flex items-center gap-2 text-foreground">
+            <HelpCircle className="size-5 text-primary" />
+            <p className="text-lg font-semibold">Help center (direct to admin)</p>
+          </div>
+
+          <div className="space-y-3">
+            <input
+              value={helpSubject}
+              onChange={(e) => setHelpSubject(e.target.value)}
+              placeholder="Subject"
+              maxLength={160}
+              className="w-full rounded-xl border border-border px-3 py-2 text-sm outline-none focus:border-primary/45"
+            />
+            <textarea
+              value={helpMessage}
+              onChange={(e) => setHelpMessage(e.target.value)}
+              placeholder="Describe your concern so admin can help quickly."
+              maxLength={3000}
+              className="min-h-40 w-full rounded-xl border border-border px-3 py-2 text-sm outline-none focus:border-primary/45"
+            />
+            {helpFeedback ? <p className="text-sm text-muted-foreground">{helpFeedback}</p> : null}
+          </div>
+
+          <div className="mt-4 flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setHelpCenterOpen(false)}>
+              Close
+            </Button>
+            <Button type="button" onClick={() => void submitHelpCenterConcern()} disabled={helpSubmitting}>
+              {helpSubmitting ? "Sending..." : "Send to admin"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    ) : null}
     {addressModalOpen ? (
       <div className="fixed inset-0 z-[70] bg-black/20 px-4 pt-20" onClick={() => setAddressModalOpen(false)}>
         <div

@@ -7,10 +7,12 @@ import {
   assignAdminOrderRider,
   fetchAdminOrder,
   fetchAdminOrders,
+  fetchAdminOrderSummary,
   fetchAdminRiders,
   updateAdminOrderStatus,
   type AdminOrderDetail,
   type AdminOrderRow,
+  type AdminOrderSummary,
   type AdminRiderOption,
   type AdminSupportNote,
 } from "@/lib/admin-api";
@@ -48,8 +50,10 @@ export default function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [searchDraft, setSearchDraft] = useState("");
+  const [riderFilter, setRiderFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [summary, setSummary] = useState<AdminOrderSummary | null>(null);
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
@@ -73,22 +77,41 @@ export default function OrdersPage() {
   const loadOrders = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetchAdminOrders({
-        page,
-        per_page: 12,
-        status: statusFilter === "all" ? undefined : statusFilter,
-        search: search || undefined,
-      });
+      const [res, summaryRes] = await Promise.all([
+        fetchAdminOrders({
+          page,
+          per_page: 12,
+          status: statusFilter === "all" ? undefined : statusFilter,
+          search: search || undefined,
+          rider_id:
+            riderFilter === "all"
+              ? undefined
+              : riderFilter === "unassigned"
+                ? "unassigned"
+                : Number(riderFilter),
+        }),
+        fetchAdminOrderSummary(),
+      ]);
       setOrders(res.data);
       setLastPage(res.last_page);
       setTotal(res.total);
+      setSummary(summaryRes);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load orders.");
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter, search]);
+  }, [page, statusFilter, search, riderFilter]);
+
+  const loadRiderOptions = useCallback(async () => {
+    try {
+      const ridersRes = await fetchAdminRiders({ per_page: 100, active: true });
+      setRiderOptions(ridersRes.data);
+    } catch {
+      setRiderOptions([]);
+    }
+  }, []);
 
   async function openDetail(orderId: number) {
     setSelectedOrderId(orderId);
@@ -124,6 +147,10 @@ export default function OrdersPage() {
   useEffect(() => {
     void loadOrders();
   }, [loadOrders]);
+
+  useEffect(() => {
+    void loadRiderOptions();
+  }, [loadRiderOptions]);
 
   const detailNotes = useMemo(() => detail?.notes ?? [], [detail]);
 
@@ -200,6 +227,25 @@ export default function OrdersPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
+              <p className="text-xs text-muted-foreground">Unassigned active</p>
+              <p className="text-lg font-semibold text-foreground">{summary?.unassigned_active_orders ?? 0}</p>
+            </div>
+            <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
+              <p className="text-xs text-muted-foreground">Stalled orders</p>
+              <p className="text-lg font-semibold text-foreground">{summary?.stalled_orders ?? 0}</p>
+            </div>
+            <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
+              <p className="text-xs text-muted-foreground">Active riders</p>
+              <p className="text-lg font-semibold text-foreground">{summary?.active_riders ?? 0}</p>
+            </div>
+            <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
+              <p className="text-xs text-muted-foreground">Out for delivery</p>
+              <p className="text-lg font-semibold text-foreground">{summary?.out_for_delivery ?? 0}</p>
+            </div>
+          </div>
+
           <div className="flex flex-wrap items-center gap-2">
             <select
               value={statusFilter}
@@ -212,6 +258,23 @@ export default function OrdersPage() {
               <option value="all">All statuses</option>
               {ORDER_STATUSES.map((status) => (
                 <option key={status} value={status}>{formatStatus(status)}</option>
+              ))}
+            </select>
+
+            <select
+              value={riderFilter}
+              onChange={(e) => {
+                setPage(1);
+                setRiderFilter(e.target.value);
+              }}
+              className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            >
+              <option value="all">All riders</option>
+              <option value="unassigned">Unassigned only</option>
+              {riderOptions.map((rider) => (
+                <option key={rider.id} value={String(rider.id)}>
+                  {rider.name}
+                </option>
               ))}
             </select>
 

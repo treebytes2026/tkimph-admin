@@ -1192,10 +1192,10 @@ function HomeInner() {
                 <div className="flex flex-col items-start justify-between gap-6 rounded-3xl bg-primary p-8 text-primary-foreground shadow-lg ring-2 ring-brand-yellow/50 md:flex-row md:items-center md:p-10">
                   <div>
                     <h2 className="text-2xl font-bold tracking-tight md:text-3xl">
-                      Free delivery on your first order
+                      Order faster with your account
                     </h2>
                     <p className="mt-2 max-w-xl text-sm text-primary-foreground/85 md:text-base">
-                      Create an account or download the app to unlock deals and faster checkout.
+                      Create an account or download the app to unlock deals, saved addresses, and faster checkout.
                     </p>
                   </div>
                   <Link href="/login">

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, Bike, ChevronRight, Inbox, Sparkles, Store } from "lucide-react";
+import { Bell, Bike, ChevronRight, Inbox, MessageSquareWarning, ShoppingBag, Sparkles, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -21,27 +21,74 @@ import {
 import { useAdminRealtime } from "@/contexts/admin-realtime-context";
 import { cn } from "@/lib/utils";
 
+function notificationKind(n: AdminNotificationRow): string {
+  return String(n.data?.type ?? n.data?.category ?? "").trim();
+}
+
 function notificationHref(n: AdminNotificationRow): string {
-  const t = n.data?.type;
-  if (t === "partner_application") return "/dashboard/partner-applications";
-  if (t === "rider_application") return "/dashboard/rider-applications";
+  const kind = notificationKind(n);
+  if (kind === "partner_application") return "/dashboard/partner-applications";
+  if (kind === "rider_application") return "/dashboard/rider-applications";
+  if (kind.startsWith("commission_")) return "/dashboard/commissions";
+  if (kind.startsWith("settlement_")) return "/dashboard/restaurants";
+  if (n.data?.order_id || kind.includes("order")) return "/dashboard/orders";
+  if (kind === "customer_help_center") return "/dashboard/help-center";
   return "/dashboard";
 }
 
 function notificationTitle(n: AdminNotificationRow): string {
-  const t = n.data?.type;
-  if (t === "partner_application") {
+  const kind = notificationKind(n);
+  if (kind === "partner_application") {
     const name = n.data?.business_name?.trim();
     return name ? `New partner: ${name}` : "New partner application";
   }
-  if (t === "rider_application") {
+  if (kind === "rider_application") {
     const name = n.data?.name?.trim();
     return name ? `New rider: ${name}` : "New rider application";
   }
-  return "Notification";
+  if (kind === "customer_help_center") {
+    const subject = n.data?.subject;
+    if (typeof subject === "string" && subject.trim()) return `Help center: ${subject.trim()}`;
+    return "Customer help center concern";
+  }
+  if (kind === "settlement_payment_proof_submitted") {
+    const restaurant = typeof n.data?.restaurant_name === "string" ? n.data.restaurant_name.trim() : "";
+    return restaurant ? `Legacy settlement notice: ${restaurant}` : "Legacy settlement notice";
+  }
+  if (kind === "commission_payment_proof_submitted") {
+    const restaurant = typeof n.data?.restaurant_name === "string" ? n.data.restaurant_name.trim() : "";
+    return restaurant ? `Commission proof: ${restaurant}` : "Commission payment proof";
+  }
+  if (kind === "commission_collection_created") return "Commission collection created";
+  if (kind === "commission_collection_overdue_admin") {
+    const restaurant = typeof n.data?.restaurant_name === "string" ? n.data.restaurant_name.trim() : "";
+    return restaurant ? `Overdue commission: ${restaurant}` : "Overdue commission payment";
+  }
+  if (kind === "settlement_generated") return "Legacy settlement generated";
+  if (kind.startsWith("settlement_overdue_")) return "Legacy settlement action";
+  if (kind === "settlement_settled") return "Legacy settlement closed";
+  if (kind === "settlement_reopened") return "Legacy settlement reopened";
+  if (typeof n.data?.message === "string" && n.data.message.trim()) {
+    return n.data.message.trim();
+  }
+  return "System notification";
 }
 
 function notificationSubtitle(n: AdminNotificationRow): string | null {
+  if (typeof n.data?.partner_reference_number === "string" && n.data.partner_reference_number.trim()) {
+    return `Reference: ${n.data.partner_reference_number.trim()}`;
+  }
+  if (typeof n.data?.partner_payment_method === "string" && n.data.partner_payment_method.trim()) {
+    return `Method: ${n.data.partner_payment_method.trim()}`;
+  }
+  if (typeof n.data?.due_date === "string" && n.data.due_date.trim()) {
+    return `Due date: ${n.data.due_date.trim()}`;
+  }
+  if (typeof n.data?.due_date === "string" && n.data.due_date.trim()) {
+    return `Due date: ${n.data.due_date.trim()}`;
+  }
+  if (typeof n.data?.customer_email === "string" && n.data.customer_email.trim()) return n.data.customer_email.trim();
+  if (typeof n.data?.order_number === "string" && n.data.order_number.trim()) return `Order ${n.data.order_number.trim()}`;
   const email = n.data?.email?.trim();
   return email || null;
 }
@@ -64,8 +111,16 @@ function formatRelativeTime(iso: string | null): string {
 }
 
 function NotificationGlyph({ n }: { n: AdminNotificationRow }) {
-  const t = n.data?.type;
-  const isRider = t === "rider_application";
+  const kind = notificationKind(n);
+  const icon = kind === "rider_application"
+    ? <Bike className="size-[1.125rem]" strokeWidth={2} />
+    : kind === "customer_help_center"
+      ? <MessageSquareWarning className="size-[1.125rem]" strokeWidth={2} />
+      : kind.startsWith("settlement_")
+        ? <ShoppingBag className="size-[1.125rem]" strokeWidth={2} />
+      : kind.includes("order")
+        ? <ShoppingBag className="size-[1.125rem]" strokeWidth={2} />
+        : <Store className="size-[1.125rem]" strokeWidth={2} />;
   return (
     <div
       className={cn(
@@ -75,7 +130,7 @@ function NotificationGlyph({ n }: { n: AdminNotificationRow }) {
           : "border-border/60 bg-muted/60 text-muted-foreground"
       )}
     >
-      {isRider ? <Bike className="size-[1.125rem]" strokeWidth={2} /> : <Store className="size-[1.125rem]" strokeWidth={2} />}
+      {icon}
     </div>
   );
 }
@@ -98,39 +153,45 @@ function NotificationSkeleton() {
 
 export function AdminNotificationBell() {
   const router = useRouter();
-  const { unreadNotificationCount, refresh } = useAdminRealtime();
+  const { unreadNotificationCount, refresh, lastUpdatedAt } = useAdminRealtime();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<AdminNotificationRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadList = useCallback(async () => {
-    setLoading(true);
+  const loadList = useCallback(async (options?: { silent?: boolean }) => {
+    if (!options?.silent) setLoading(true);
     setError(null);
     try {
       const res = await fetchAdminNotifications({ per_page: 15, page: 1 });
       setItems(res.data);
     } catch (e) {
       setError(e instanceof AdminApiError ? e.message : "Could not load notifications");
-      setItems([]);
+      if (!options?.silent) setItems([]);
     } finally {
-      setLoading(false);
+      if (!options?.silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (open) void loadList();
+    void loadList({ silent: true });
+  }, [loadList]);
+
+  useEffect(() => {
+    if (open) void loadList({ silent: false });
   }, [open, loadList]);
 
-  async function onSelect(n: AdminNotificationRow) {
+  useEffect(() => {
+    if (open) void loadList({ silent: true });
+  }, [lastUpdatedAt, open, loadList]);
+
+  function onSelect(n: AdminNotificationRow) {
     const href = notificationHref(n);
-    try {
-      if (!n.read_at) {
-        await markNotificationRead(n.id);
-        await refresh();
-      }
-    } catch {
-      // still navigate
+    if (!n.read_at) {
+      setItems((prev) =>
+        prev.map((item) => (item.id === n.id ? { ...item, read_at: new Date().toISOString() } : item))
+      );
+      void markNotificationRead(n.id).then(() => refresh()).catch(() => {});
     }
     setOpen(false);
     router.push(href);
@@ -140,9 +201,10 @@ export function AdminNotificationBell() {
     e.preventDefault();
     e.stopPropagation();
     try {
+      setItems((prev) => prev.map((item) => ({ ...item, read_at: item.read_at ?? new Date().toISOString() })));
       await markAllNotificationsRead();
       await refresh();
-      await loadList();
+      await loadList({ silent: true });
     } catch {
       // ignore
     }

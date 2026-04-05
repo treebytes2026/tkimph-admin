@@ -35,6 +35,7 @@ import {
   ChevronRight,
   Loader2,
   Pencil,
+  Percent,
   Plus,
   Store,
   Tags,
@@ -51,6 +52,37 @@ function groupItemsByCategory(items: PartnerMenuItemRow[]) {
     map.set(label, list);
   }
   return map;
+}
+
+function parseMoney(value: string): number {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizePercent(value: string | number): number {
+  const parsed = typeof value === "number" ? value : Number.parseFloat(value);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.min(100, parsed));
+}
+
+function effectiveDiscountPercent(
+  menu: { discount_enabled?: boolean; discount_percent?: string | number },
+  item?: { discount_enabled?: boolean; discount_percent?: string | number }
+): number {
+  if (item?.discount_enabled) return normalizePercent(item.discount_percent ?? 0);
+  if (menu.discount_enabled) return normalizePercent(menu.discount_percent ?? 0);
+  return 0;
+}
+
+function pricingPreview(price: number, discountPercent = 0): { discounted: string; commission: string; net: string } {
+  const discountedValue = Math.max(0, price - (price * normalizePercent(discountPercent)) / 100);
+  const commission = discountedValue * 0.13;
+  const net = Math.max(0, discountedValue - commission);
+  return {
+    discounted: `PHP ${discountedValue.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+    commission: `PHP ${commission.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+    net: `PHP ${net.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+  };
 }
 
 export default function PartnerMenuPage() {
@@ -73,15 +105,21 @@ export default function PartnerMenuPage() {
     name: "",
     description: "",
     price: "",
+    discount_enabled: false,
+    discount_percent: "",
   });
   const addDishPhotoInputRef = useRef<HTMLInputElement>(null);
   const [menuNameDraft, setMenuNameDraft] = useState("");
+  const [menuDiscountEnabledDraft, setMenuDiscountEnabledDraft] = useState(false);
+  const [menuDiscountPercentDraft, setMenuDiscountPercentDraft] = useState("");
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
   const [editItemForm, setEditItemForm] = useState({
     menu_category_id: 0,
     name: "",
     description: "",
     price: "",
+    discount_enabled: false,
+    discount_percent: "",
     is_available: true,
   });
 
@@ -169,6 +207,8 @@ export default function PartnerMenuPage() {
   useEffect(() => {
     if (detail) {
       setMenuNameDraft(detail.name);
+      setMenuDiscountEnabledDraft(detail.discount_enabled);
+      setMenuDiscountPercentDraft(detail.discount_percent ?? "0");
     }
   }, [detail]);
 
@@ -176,14 +216,23 @@ export default function PartnerMenuPage() {
     e.preventDefault();
     if (restaurantId == null || expandedId === null || !menuNameDraft.trim()) return;
     const next = menuNameDraft.trim();
-    if (next === detail?.name) return;
+    const nextDiscountPercent = normalizePercent(menuDiscountPercentDraft || 0);
+    const unchanged =
+      next === detail?.name &&
+      menuDiscountEnabledDraft === detail?.discount_enabled &&
+      nextDiscountPercent === normalizePercent(detail?.discount_percent ?? 0);
+    if (unchanged) return;
     setBusy("rename-menu");
     try {
-      await updatePartnerMenu(restaurantId, expandedId, { name: next });
+      await updatePartnerMenu(restaurantId, expandedId, {
+        name: next,
+        discount_enabled: menuDiscountEnabledDraft,
+        discount_percent: nextDiscountPercent,
+      });
       const d = await fetchPartnerMenu(restaurantId, expandedId);
       setDetail(d);
       await refreshMenus();
-      toast.success("Menu name saved.");
+      toast.success("Menu settings saved.");
     } catch (err) {
       toast.error(err instanceof PartnerApiError ? err.message : "Could not update menu name.");
     } finally {
@@ -198,6 +247,8 @@ export default function PartnerMenuPage() {
       name: it.name,
       description: it.description ?? "",
       price: it.price,
+      discount_enabled: it.discount_enabled,
+      discount_percent: it.discount_percent ?? "0",
       is_available: it.is_available,
     });
   }
@@ -217,6 +268,8 @@ export default function PartnerMenuPage() {
         name: editItemForm.name.trim(),
         description: editItemForm.description.trim() || null,
         price,
+        discount_enabled: editItemForm.discount_enabled,
+        discount_percent: normalizePercent(editItemForm.discount_percent || 0),
         is_available: editItemForm.is_available,
       });
       setEditingItemId(null);
@@ -281,13 +334,22 @@ export default function PartnerMenuPage() {
         name: itemForm.name.trim(),
         description: itemForm.description.trim() || undefined,
         price,
+        discount_enabled: itemForm.discount_enabled,
+        discount_percent: normalizePercent(itemForm.discount_percent || 0),
       });
       const photoFile = addDishPhotoInputRef.current?.files?.[0];
       if (photoFile) {
         await uploadPartnerMenuItemImage(restaurantId, expandedId, created.id, photoFile);
       }
       if (addDishPhotoInputRef.current) addDishPhotoInputRef.current.value = "";
-      setItemForm((f) => ({ ...f, name: "", description: "", price: "" }));
+      setItemForm((f) => ({
+        ...f,
+        name: "",
+        description: "",
+        price: "",
+        discount_enabled: false,
+        discount_percent: "",
+      }));
       const d = await fetchPartnerMenu(restaurantId, expandedId);
       setDetail(d);
       await refreshMenus();
@@ -499,6 +561,12 @@ export default function PartnerMenuPage() {
                                 {open ? "Tap to hide dishes" : "Tap to see dishes & prices"}
                               </p>
                             </div>
+                            {m.discount_enabled ? (
+                              <Badge variant="outline" className="shrink-0 gap-1 text-emerald-700">
+                                <Percent className="size-3" />
+                                {normalizePercent(m.discount_percent)}% off
+                              </Badge>
+                            ) : null}
                             <Badge variant="secondary" className="shrink-0 tabular-nums">
                               {m.items_count ?? 0} items
                             </Badge>
@@ -543,15 +611,30 @@ export default function PartnerMenuPage() {
                                       placeholder="Menu name"
                                     />
                                   </div>
+                                  <label className="flex items-center gap-2 text-xs text-foreground">
+                                    <input
+                                      type="checkbox"
+                                      className="rounded border-input"
+                                      checked={menuDiscountEnabledDraft}
+                                      onChange={(e) => setMenuDiscountEnabledDraft(e.target.checked)}
+                                    />
+                                    Enable menu-wide discount
+                                  </label>
+                                  <div className="w-full space-y-0.5 sm:w-40">
+                                    <Label className="text-[11px] text-muted-foreground">Menu discount (%)</Label>
+                                    <Input
+                                      className="h-9 text-sm"
+                                      inputMode="decimal"
+                                      value={menuDiscountPercentDraft}
+                                      onChange={(e) => setMenuDiscountPercentDraft(e.target.value)}
+                                      placeholder="0"
+                                    />
+                                  </div>
                                   <Button
                                     type="submit"
                                     size="sm"
                                     className="h-9 shrink-0"
-                                    disabled={
-                                      busy === "rename-menu" ||
-                                      !menuNameDraft.trim() ||
-                                      menuNameDraft.trim() === detail.name
-                                    }
+                                    disabled={busy === "rename-menu" || !menuNameDraft.trim()}
                                   >
                                     {busy === "rename-menu" ? (
                                       <Loader2 className="size-4 animate-spin" />
@@ -630,7 +713,7 @@ export default function PartnerMenuPage() {
                                                             </div>
                                                             <div className="grid gap-1">
                                                               <Label className="text-[11px]" htmlFor={`edit_dish_price_${it.id}`}>
-                                                                Price
+                                                                Price (PHP)
                                                               </Label>
                                                               <Input
                                                                 id={`edit_dish_price_${it.id}`}
@@ -640,6 +723,36 @@ export default function PartnerMenuPage() {
                                                                 value={editItemForm.price}
                                                                 onChange={(e) =>
                                                                   setEditItemForm((f) => ({ ...f, price: e.target.value }))
+                                                                }
+                                                              />
+                                                              <p className="text-[10px] text-muted-foreground">
+                                                                {(() => {
+                                                                  const discount = effectiveDiscountPercent(
+                                                                    {
+                                                                      discount_enabled: menuDiscountEnabledDraft,
+                                                                      discount_percent: menuDiscountPercentDraft,
+                                                                    },
+                                                                    {
+                                                                      discount_enabled: editItemForm.discount_enabled,
+                                                                      discount_percent: editItemForm.discount_percent,
+                                                                    }
+                                                                  );
+                                                                  const preview = pricingPreview(parseMoney(editItemForm.price), discount);
+                                                                  return `Customer pays ${preview.discounted}. TKimph keeps 13%: ${preview.commission}. Restaurant net: ${preview.net}.`;
+                                                                })()}
+                                                              </p>
+                                                            </div>
+                                                            <div className="grid gap-1">
+                                                              <Label className="text-[11px]" htmlFor={`edit_dish_discount_${it.id}`}>
+                                                                Dish discount (%)
+                                                              </Label>
+                                                              <Input
+                                                                id={`edit_dish_discount_${it.id}`}
+                                                                className="h-9"
+                                                                inputMode="decimal"
+                                                                value={editItemForm.discount_percent}
+                                                                onChange={(e) =>
+                                                                  setEditItemForm((f) => ({ ...f, discount_percent: e.target.value }))
                                                                 }
                                                               />
                                                             </div>
@@ -659,6 +772,20 @@ export default function PartnerMenuPage() {
                                                                 }
                                                               />
                                                             </div>
+                                                            <label className="flex items-center gap-2 text-xs sm:col-span-2">
+                                                              <input
+                                                                type="checkbox"
+                                                                className="rounded border-input"
+                                                                checked={editItemForm.discount_enabled}
+                                                                onChange={(e) =>
+                                                                  setEditItemForm((f) => ({
+                                                                    ...f,
+                                                                    discount_enabled: e.target.checked,
+                                                                  }))
+                                                                }
+                                                              />
+                                                              Override menu discount for this dish
+                                                            </label>
                                                             <label className="flex items-center gap-2 text-xs sm:col-span-2">
                                                               <input
                                                                 type="checkbox"
@@ -767,6 +894,12 @@ export default function PartnerMenuPage() {
                                                           <div className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">
                                                             {it.description}
                                                           </div>
+                                                        ) : null}
+                                                        {effectiveDiscountPercent(detail, it) > 0 ? (
+                                                          <Badge variant="outline" className="mt-1 gap-1 border-emerald-200 text-[10px] text-emerald-700">
+                                                            <Percent className="size-3" />
+                                                            {effectiveDiscountPercent(detail, it)}% off
+                                                          </Badge>
                                                         ) : null}
                                                         {!it.is_available ? (
                                                           <Badge variant="secondary" className="mt-1 text-[10px] leading-none">
@@ -878,6 +1011,34 @@ export default function PartnerMenuPage() {
                                                   value={itemForm.price}
                                                   onChange={(e) => setItemForm((f) => ({ ...f, price: e.target.value }))}
                                                 />
+                                                <p className="text-[10px] text-muted-foreground">
+                                                  {(() => {
+                                                    const discount = effectiveDiscountPercent(
+                                                      {
+                                                        discount_enabled: menuDiscountEnabledDraft,
+                                                        discount_percent: menuDiscountPercentDraft,
+                                                      },
+                                                      {
+                                                        discount_enabled: itemForm.discount_enabled,
+                                                        discount_percent: itemForm.discount_percent,
+                                                      }
+                                                    );
+                                                    const preview = pricingPreview(parseMoney(itemForm.price), discount);
+                                                    return `Customer pays ${preview.discounted}. TKimph keeps 13%: ${preview.commission}. Restaurant net: ${preview.net}.`;
+                                                  })()}
+                                                </p>
+                                              </div>
+                                              <div className="grid gap-1">
+                                                <Label className="text-[11px]" htmlFor="dish_discount">
+                                                  Dish discount (%)
+                                                </Label>
+                                                <Input
+                                                  id="dish_discount"
+                                                  className="h-9"
+                                                  inputMode="decimal"
+                                                  value={itemForm.discount_percent}
+                                                  onChange={(e) => setItemForm((f) => ({ ...f, discount_percent: e.target.value }))}
+                                                />
                                               </div>
                                               <div className="grid gap-1 sm:col-span-2">
                                                 <Label className="text-[11px]" htmlFor="dish_desc">
@@ -892,6 +1053,17 @@ export default function PartnerMenuPage() {
                                                   }
                                                 />
                                               </div>
+                                              <label className="flex items-center gap-2 text-xs sm:col-span-2">
+                                                <input
+                                                  type="checkbox"
+                                                  className="rounded border-input"
+                                                  checked={itemForm.discount_enabled}
+                                                  onChange={(e) =>
+                                                    setItemForm((f) => ({ ...f, discount_enabled: e.target.checked }))
+                                                  }
+                                                />
+                                                Override menu discount for this dish
+                                              </label>
                                               <div className="grid gap-1 sm:col-span-2">
                                                 <Label className="text-[11px]" htmlFor="dish_photo_new">
                                                   Dish photo (optional)

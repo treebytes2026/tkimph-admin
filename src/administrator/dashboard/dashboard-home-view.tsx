@@ -18,6 +18,9 @@ import {
   ClipboardList,
   Bell,
   Loader2,
+  Wallet,
+  HandCoins,
+  ReceiptText,
 } from "lucide-react";
 
 type DashboardCounts = {
@@ -28,6 +31,11 @@ type DashboardCounts = {
 function formatNumber(value: number | null): string {
   if (value == null) return "--";
   return value.toLocaleString("en-PH");
+}
+
+function formatMoney(value: number | null | undefined): string {
+  if (value == null) return "--";
+  return `PHP ${value.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function relativeFromTimestamp(ts: number | null): string {
@@ -178,6 +186,82 @@ export function DashboardHomeView() {
           </Card>
         ))}
       </div>
+
+      {orderSummary ? (
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)]">
+          <Card className="relative overflow-hidden border-primary/15 bg-[linear-gradient(135deg,rgba(255,255,255,1),rgba(248,250,252,1),rgba(255,247,237,1))] shadow-sm">
+            <div className="absolute right-0 top-0 h-32 w-32 translate-x-1/4 -translate-y-1/4 rounded-full bg-primary/10 blur-3xl" aria-hidden />
+            <CardHeader className="relative flex flex-row items-start justify-between space-y-0 pb-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Platform income</p>
+                <CardTitle className="mt-2 text-3xl font-bold tracking-tight text-foreground">
+                  {formatMoney(orderSummary.platform_income)}
+                </CardTitle>
+                <p className="mt-2 max-w-md text-sm text-muted-foreground">
+                  Total commission collected from all non-cancelled orders across the platform.
+                </p>
+              </div>
+              <div className="flex size-12 items-center justify-center rounded-2xl border border-primary/15 bg-white/85 text-primary shadow-sm">
+                <Wallet className="size-5" />
+              </div>
+            </CardHeader>
+            <CardContent className="relative grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-white/80 bg-white/85 px-4 py-3 shadow-sm">
+                <p className="text-xs text-muted-foreground">Gross sales</p>
+                <p className="mt-1 text-lg font-semibold text-foreground">{formatMoney(orderSummary.gross_sales)}</p>
+              </div>
+              <div className="rounded-2xl border border-white/80 bg-white/85 px-4 py-3 shadow-sm">
+                <p className="text-xs text-muted-foreground">Restaurant net</p>
+                <p className="mt-1 text-lg font-semibold text-foreground">{formatMoney(orderSummary.restaurant_net)}</p>
+              </div>
+              <div className="rounded-2xl border border-white/80 bg-white/85 px-4 py-3 shadow-sm">
+                <p className="text-xs text-muted-foreground">Retention</p>
+                <p className="mt-1 text-lg font-semibold text-foreground">
+                  {orderSummary.gross_sales > 0
+                    ? `${((orderSummary.platform_income / orderSummary.gross_sales) * 100).toFixed(1)}%`
+                    : "--"}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/70 shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Revenue split</p>
+                <CardTitle className="mt-2 text-lg">Restaurant payout</CardTitle>
+              </div>
+              <div className="flex size-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-700">
+                <HandCoins className="size-5" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-bold tracking-tight text-foreground">{formatMoney(orderSummary.restaurant_net)}</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Revenue remaining for restaurants after platform commission.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/70 shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Sales volume</p>
+                <CardTitle className="mt-2 text-lg">Gross processed</CardTitle>
+              </div>
+              <div className="flex size-10 items-center justify-center rounded-xl bg-sky-500/10 text-sky-700">
+                <ReceiptText className="size-5" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-bold tracking-tight text-foreground">{formatMoney(orderSummary.gross_sales)}</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Total order value processed across active platform sales.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
 
       {pendingTotal > 0 ? (
         <Card className="border-primary/25 bg-primary/[0.04] shadow-sm">

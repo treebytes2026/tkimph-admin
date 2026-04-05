@@ -29,10 +29,13 @@ import { LogoutConfirmDialog } from "@/components/logout-confirm-dialog";
 import {
   LayoutDashboard,
   Bell,
+  CheckCheck,
+  Clock3,
   LogOut,
   Loader2,
   Menu,
   ChevronRight,
+  Package2,
   UtensilsCrossed,
   Clock,
   ShoppingBag,
@@ -55,6 +58,26 @@ function formatRelativeTime(iso: string | null): string {
   const diffHr = Math.round(diffMin / 60);
   if (diffHr < 24) return rtf.format(-diffHr, "hour");
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function partnerNotificationTitle(notification: PartnerNotificationRow): string {
+  const category = String(notification.data?.category ?? notification.data?.kind ?? "").trim();
+  if (category === "settlement_overdue") return "Legacy settlement reminder";
+  if (category === "payment_proof_reviewed") return "Legacy payment-proof review";
+  if (category === "commission_collection_created") return "Commission due";
+  if (category === "commission_collection_received") return "Commission received";
+  if (category === "commission_collection_reopened") return "Commission reopened";
+  if (category === "order_update") return "Order update";
+  if (notification.data?.order_number) return `Order ${notification.data.order_number}`;
+  return "Partner notification";
+}
+
+function partnerNotificationAccent(notification: PartnerNotificationRow): string {
+  const category = String(notification.data?.category ?? notification.data?.kind ?? "").trim();
+  if (category === "settlement_overdue") return "border-amber-200 bg-amber-50 text-amber-700";
+  if (category.startsWith("commission_collection_")) return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (!notification.read_at) return "border-primary/20 bg-primary/[0.06] text-primary";
+  return "border-border/70 bg-card text-muted-foreground";
 }
 
 const navigation: Array<{
@@ -243,6 +266,12 @@ export default function PartnerDashboardLayout({ children }: { children: React.R
   }, [notificationOpen, loadNotifications]);
 
   async function onOpenOrderNotification(notification: PartnerNotificationRow) {
+    const category = String(notification.data?.category ?? "").trim();
+    const targetHref = category.startsWith("settlement_")
+      ? "/partner/dashboard"
+      : category.startsWith("commission_collection_")
+        ? "/partner/dashboard/earnings"
+      : "/partner/dashboard/orders";
     try {
       if (!notification.read_at) {
         await markPartnerNotificationRead(notification.id);
@@ -251,7 +280,7 @@ export default function PartnerDashboardLayout({ children }: { children: React.R
       // ignore mark-read failure and still navigate
     } finally {
       setNotificationOpen(false);
-      router.push("/partner/dashboard/orders");
+      router.push(targetHref);
     }
   }
 
@@ -359,21 +388,35 @@ export default function PartnerDashboardLayout({ children }: { children: React.R
                   </span>
                 ) : null}
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[min(100vw-1.5rem,24rem)] rounded-2xl p-0">
-                <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">Notifications</p>
-                    <p className="text-xs text-muted-foreground">
-                      {unreadOrdersCount > 0 ? `${unreadOrdersCount} unread` : "All caught up"}
-                    </p>
+              <DropdownMenuContent align="end" className="w-[min(100vw-1.5rem,26rem)] overflow-hidden rounded-3xl border border-border/70 p-0 shadow-2xl">
+                <div className="border-b border-border/60 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 px-4 py-4 text-white">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold">Notifications</p>
+                      <p className="mt-1 text-xs text-slate-300">
+                        {unreadOrdersCount > 0 ? `${unreadOrdersCount} unread updates waiting` : "All caught up"}
+                      </p>
+                    </div>
+                    {unreadOrdersCount > 0 ? (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="rounded-full border-0 bg-white/12 text-white hover:bg-white/18"
+                        onClick={() => void onMarkAllNotificationsRead()}
+                      >
+                        <CheckCheck className="size-4" />
+                        Mark all read
+                      </Button>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-white/10 px-2.5 py-1 text-[11px] font-semibold text-slate-200">
+                        <Bell className="size-3.5" />
+                        Quiet now
+                      </span>
+                    )}
                   </div>
-                  {unreadOrdersCount > 0 ? (
-                    <Button type="button" variant="ghost" size="sm" onClick={() => void onMarkAllNotificationsRead()}>
-                      Mark all read
-                    </Button>
-                  ) : null}
                 </div>
-                <div className="max-h-[320px] overflow-y-auto p-1.5">
+                <div className="max-h-[360px] overflow-y-auto bg-background p-2">
                   {notificationsLoading ? (
                     <div className="flex items-center justify-center gap-2 px-3 py-8 text-sm text-muted-foreground">
                       <Loader2 className="size-4 animate-spin text-primary" />
@@ -384,7 +427,7 @@ export default function PartnerDashboardLayout({ children }: { children: React.R
                   ) : notifications.length === 0 ? (
                     <p className="px-3 py-6 text-center text-sm text-muted-foreground">No notifications yet.</p>
                   ) : (
-                    <ul className="space-y-1">
+                    <ul className="space-y-2">
                       {notifications.map((notification) => {
                         const unread = !notification.read_at;
                         return (
@@ -392,17 +435,42 @@ export default function PartnerDashboardLayout({ children }: { children: React.R
                             <button
                               type="button"
                               onClick={() => void onOpenOrderNotification(notification)}
-                              className={`w-full rounded-xl px-3 py-2 text-left transition hover:bg-muted/70 ${
-                                unread ? "bg-primary/[0.05]" : ""
-                              }`}
+                              className={`w-full rounded-2xl border px-3 py-3 text-left transition hover:-translate-y-0.5 hover:shadow-md ${partnerNotificationAccent(notification)}`}
                             >
-                              <p className="text-sm font-medium text-foreground">
-                                {notification.data?.message || "New notification"}
-                              </p>
-                              <p className="mt-0.5 text-xs text-muted-foreground">
-                                {notification.data?.order_number ? `${notification.data.order_number} • ` : ""}
-                                {formatRelativeTime(notification.created_at)}
-                              </p>
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`inline-flex size-8 items-center justify-center rounded-2xl ${unread ? "bg-white text-primary shadow-sm" : "bg-muted text-foreground/70"}`}>
+                                      {String(notification.data?.category ?? "").trim() === "settlement_overdue" ? (
+                                        <Clock3 className="size-4" />
+                                      ) : (
+                                        <Package2 className="size-4" />
+                                      )}
+                                    </span>
+                                    <div className="min-w-0">
+                                      <p className="truncate text-sm font-semibold text-foreground">
+                                        {partnerNotificationTitle(notification)}
+                                      </p>
+                                      <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                                        {notification.data?.message || "New notification"}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
+                                    {notification.data?.order_number ? (
+                                      <span className="rounded-full border border-border/70 bg-background px-2 py-1 font-semibold text-foreground">
+                                        {notification.data.order_number}
+                                      </span>
+                                    ) : null}
+                                    <span className="text-muted-foreground">
+                                      {formatRelativeTime(notification.created_at)}
+                                    </span>
+                                  </div>
+                                </div>
+                                {unread ? (
+                                  <span className="mt-1 size-2.5 rounded-full bg-primary shadow-[0_0_0_4px_rgba(22,163,74,0.12)]" />
+                                ) : null}
+                              </div>
                             </button>
                           </li>
                         );

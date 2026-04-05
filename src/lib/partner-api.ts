@@ -279,16 +279,118 @@ export async function fetchPartnerEarnings(params?: {
   restaurant_name: string;
   order_count: number;
   gross_sales: number;
-  service_fees: number;
+  commission_rate: number;
+  platform_commission: number;
   delivery_fees: number;
   restaurant_net: number;
-  pending_settlement_amount: number;
+  payment_details: {
+    gcash_name: string;
+    gcash_number: string;
+  };
 }> {
   const q = new URLSearchParams();
   if (params?.date_from) q.set("date_from", params.date_from);
   if (params?.date_to) q.set("date_to", params.date_to);
   const qs = q.toString();
   return partnerRequest(`/partner/earnings${qs ? `?${qs}` : ""}`);
+}
+
+export interface PartnerCommissionCollectionRow {
+  id: number;
+  restaurant_id: number;
+  restaurant: { id: number; name: string } | null;
+  period_from: string | null;
+  period_to: string | null;
+  due_date: string | null;
+  is_overdue: boolean;
+  order_count: number;
+  gross_sales: number;
+  commission_amount: number;
+  restaurant_net: number;
+  status: "pending" | "received";
+  partner_payment_method: "gcash" | null;
+  partner_reference_number: string | null;
+  partner_payment_note: string | null;
+  payment_proof_path: string | null;
+  payment_proof_url: string | null;
+  payment_submitted_at: string | null;
+  collection_reference: string | null;
+  notes: string | null;
+  received_at: string | null;
+}
+
+export interface PartnerCommissionCollectionsResponse {
+  data: PartnerCommissionCollectionRow[];
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
+  payment_details: {
+    gcash_name: string;
+    gcash_number: string;
+  };
+}
+
+export async function fetchPartnerCommissionCollections(params?: {
+  page?: number;
+  per_page?: number;
+  status?: "pending" | "received";
+}): Promise<PartnerCommissionCollectionsResponse> {
+  const q = new URLSearchParams();
+  if (params?.page) q.set("page", String(params.page));
+  if (params?.per_page) q.set("per_page", String(params.per_page));
+  if (params?.status) q.set("status", params.status);
+  const qs = q.toString();
+  return partnerRequest<PartnerCommissionCollectionsResponse>(`/partner/commission-collections${qs ? `?${qs}` : ""}`);
+}
+
+export async function submitPartnerCommissionPaymentProof(
+  collectionId: number,
+  payload: {
+    partner_payment_method: "gcash";
+    partner_reference_number?: string | null;
+    partner_payment_note?: string | null;
+    payment_proof: File;
+  }
+): Promise<{ message: string; collection: PartnerCommissionCollectionRow }> {
+  const token = getStoredToken();
+  const formData = new FormData();
+  formData.append("partner_payment_method", payload.partner_payment_method);
+  if (payload.partner_reference_number?.trim()) formData.append("partner_reference_number", payload.partner_reference_number.trim());
+  if (payload.partner_payment_note?.trim()) formData.append("partner_payment_note", payload.partner_payment_note.trim());
+  formData.append("payment_proof", payload.payment_proof);
+
+  const headers: HeadersInit = {
+    Accept: "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  const res = await fetch(`${API_URL}/partner/commission-collections/${collectionId}/payment-proof`, {
+    method: "POST",
+    body: formData,
+    headers,
+  });
+
+  if (res.status === 401) throw new PartnerApiError("Please sign in again.", 401);
+  if (res.status === 403) throw new PartnerApiError("Partner access only.", 403);
+  if (!res.ok) {
+    const text = await res.text();
+    let msg = res.statusText || "Request failed";
+    try {
+      const data = JSON.parse(text) as { message?: string; error?: string; errors?: Record<string, string[]> };
+      if (data.message) msg = data.message;
+      else if (data.error) msg = data.error;
+      else if (data.errors) {
+        const first = Object.values(data.errors)[0];
+        if (Array.isArray(first) && first[0]) msg = first[0];
+      }
+    } catch {
+      if (text) msg = text.slice(0, 200);
+    }
+    throw new PartnerApiError(msg, res.status);
+  }
+
+  return res.json() as Promise<{ message: string; collection: PartnerCommissionCollectionRow }>;
 }
 
 export async function fetchPartnerUnreadNotificationsCount(): Promise<{ count: number }> {
@@ -305,15 +407,44 @@ export interface PartnerNotificationRow {
   id: string;
   type: string;
   data: {
+    category?: string;
     kind?: string;
     message?: string;
     order_id?: number;
     order_number?: string;
+    settlement_id?: number;
+    due_date?: string;
     total?: number;
     placed_at?: string;
+    [key: string]: unknown;
   };
   read_at: string | null;
   created_at: string;
+}
+
+export interface PartnerSettlementRow {
+  id: number;
+  restaurant_id: number;
+  restaurant: { id: number; name: string } | null;
+  period_from: string | null;
+  period_to: string | null;
+  due_date: string | null;
+  status: "pending" | "settled";
+  platform_revenue: number;
+  partner_reference_number: string | null;
+  partner_payment_note: string | null;
+  payment_proof_path: string | null;
+  payment_proof_url: string | null;
+  payment_submitted_at: string | null;
+  last_overdue_notified_at: string | null;
+}
+
+export interface PartnerSettlementsResponse {
+  data: PartnerSettlementRow[];
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
 }
 
 export interface PartnerNotificationsResponse {
@@ -333,6 +464,58 @@ export async function fetchPartnerNotifications(params?: {
   if (params?.per_page) q.set("per_page", String(params.per_page));
   const qs = q.toString();
   return partnerRequest<PartnerNotificationsResponse>(`/partner/notifications${qs ? `?${qs}` : ""}`);
+}
+
+export async function fetchPartnerSettlements(params?: { page?: number; per_page?: number; status?: "pending" | "settled" }): Promise<PartnerSettlementsResponse> {
+  const q = new URLSearchParams();
+  if (params?.page) q.set("page", String(params.page));
+  if (params?.per_page) q.set("per_page", String(params.per_page));
+  if (params?.status) q.set("status", params.status);
+  const qs = q.toString();
+  return partnerRequest<PartnerSettlementsResponse>(`/partner/settlements${qs ? `?${qs}` : ""}`);
+}
+
+export async function submitPartnerSettlementPaymentProof(
+  settlementId: number,
+  payload: { partner_reference_number: string; partner_payment_note?: string | null; payment_proof: File }
+): Promise<{ message: string; settlement: PartnerSettlementRow }> {
+  const token = getStoredToken();
+  const formData = new FormData();
+  formData.append("partner_reference_number", payload.partner_reference_number);
+  if (payload.partner_payment_note?.trim()) formData.append("partner_payment_note", payload.partner_payment_note.trim());
+  formData.append("payment_proof", payload.payment_proof);
+
+  const headers: HeadersInit = {
+    Accept: "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  const res = await fetch(`${API_URL}/partner/settlements/${settlementId}/payment-proof`, {
+    method: "POST",
+    body: formData,
+    headers,
+  });
+
+  if (res.status === 401) throw new PartnerApiError("Please sign in again.", 401);
+  if (res.status === 403) throw new PartnerApiError("Partner access only.", 403);
+  if (!res.ok) {
+    const text = await res.text();
+    let msg = res.statusText || "Request failed";
+    try {
+      const data = JSON.parse(text) as { message?: string; error?: string; errors?: Record<string, string[]> };
+      if (data.message) msg = data.message;
+      else if (data.error) msg = data.error;
+      else if (data.errors) {
+        const first = Object.values(data.errors)[0];
+        if (Array.isArray(first) && first[0]) msg = first[0];
+      }
+    } catch {
+      if (text) msg = text.slice(0, 200);
+    }
+    throw new PartnerApiError(msg, res.status);
+  }
+
+  return res.json() as Promise<{ message: string; settlement: PartnerSettlementRow }>;
 }
 
 export async function markPartnerNotificationRead(id: string): Promise<{ message: string }> {
@@ -535,6 +718,8 @@ export interface PartnerMenuListRow {
   name: string;
   sort_order: number;
   is_active: boolean;
+  discount_enabled: boolean;
+  discount_percent: string;
   items_count?: number;
 }
 
@@ -554,6 +739,11 @@ export interface PartnerMenuItemRow {
   image_path?: string | null;
   image_url?: string | null;
   price: string;
+  commission_rate: string;
+  platform_commission: string;
+  restaurant_net: string;
+  discount_enabled: boolean;
+  discount_percent: string;
   sort_order: number;
   is_available: boolean;
   menu_category?: { id: number; name: string };
@@ -569,7 +759,7 @@ export async function fetchPartnerMenu(restaurantId: number, menuId: number): Pr
 
 export async function createPartnerMenu(
   restaurantId: number,
-  body: { name: string; sort_order?: number; is_active?: boolean }
+  body: { name: string; sort_order?: number; is_active?: boolean; discount_enabled?: boolean; discount_percent?: number }
 ): Promise<PartnerMenuListRow> {
   return partnerRequest<PartnerMenuListRow>(`/partner/restaurants/${restaurantId}/menus`, {
     method: "POST",
@@ -580,7 +770,7 @@ export async function createPartnerMenu(
 export async function updatePartnerMenu(
   restaurantId: number,
   menuId: number,
-  body: { name?: string; sort_order?: number; is_active?: boolean }
+  body: { name?: string; sort_order?: number; is_active?: boolean; discount_enabled?: boolean; discount_percent?: number }
 ): Promise<PartnerMenuListRow> {
   return partnerRequest<PartnerMenuListRow>(`/partner/restaurants/${restaurantId}/menus/${menuId}`, {
     method: "PATCH",
@@ -600,6 +790,8 @@ export async function createPartnerMenuItem(
     name: string;
     description?: string | null;
     price: number;
+    discount_enabled?: boolean;
+    discount_percent?: number;
     sort_order?: number;
     is_available?: boolean;
   }
@@ -619,6 +811,8 @@ export async function updatePartnerMenuItem(
     name: string;
     description: string | null;
     price: number;
+    discount_enabled: boolean;
+    discount_percent: number;
     sort_order: number;
     is_available: boolean;
   }>

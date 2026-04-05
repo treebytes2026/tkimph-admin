@@ -26,26 +26,18 @@ import {
 import { TopBanner, Navbar, Footer } from "@/components/landing";
 import { CheckoutAuthPanel } from "@/components/checkout/checkout-auth-panel";
 import { useCart } from "@/contexts/cart-context";
-import { publicFileUrl } from "@/lib/public-api";
+import { fetchPublicRestaurantBySlug, publicFileUrl, type PublicRestaurant } from "@/lib/public-api";
 import { AUTH_CHANGED_EVENT, getStoredUser, notifyAuthChanged, type AuthUser } from "@/lib/auth";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import {
-  fetchCustomerProfile,
-  placeCustomerOrder,
-  updateCustomerProfile,
-  validateCustomerPromotion,
-} from "@/lib/customer-api";
+import { fetchCustomerProfile, placeCustomerOrder, updateCustomerProfile, validateCustomerPromotion } from "@/lib/customer-api";
 
 function formatPhpSpaced(amount: number): string {
   if (Number.isNaN(amount)) return "₱ 0";
   const s = amount.toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
   return `₱ ${s}`;
 }
-
-const SERVICE_FEE_PHP = 5;
-const DELIVERY_STRIKE_PHP = 19;
 
 type ReverseGeocodeResponse = {
   display_name?: string;
@@ -238,6 +230,7 @@ function CheckoutPageInner() {
   const [pickupTime, setPickupTime] = useState("");
   const [mapCoords, setMapCoords] = useState<MapCoords | null>(null);
   const [mapLoading, setMapLoading] = useState(false);
+  const [freshRestaurant, setFreshRestaurant] = useState<PublicRestaurant | null>(null);
   const [savedLocations, setSavedLocations] = useState<SavedLocation[]>([]);
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -309,6 +302,33 @@ function CheckoutPageInner() {
   }, [userId, user?.address]);
 
   useEffect(() => {
+    if (!cartRestaurant?.slug) {
+      setFreshRestaurant(null);
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetchPublicRestaurantBySlug(cartRestaurant.slug!);
+        if (!cancelled) {
+          setFreshRestaurant(res.restaurant);
+        }
+      } catch {
+        if (!cancelled) {
+          setFreshRestaurant(null);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cartRestaurant?.slug]);
+
+  const effectiveRestaurant = freshRestaurant ?? cartRestaurant;
+
+  useEffect(() => {
     const address = deliveryAddress.trim();
     if (!address) {
       setMapCoords(null);
@@ -373,11 +393,25 @@ function CheckoutPageInner() {
     };
   }, [editorOpen, editingLocation.address]);
 
-  const grandTotal = useMemo(() => Math.max(0, cartTotal + SERVICE_FEE_PHP - (promoApplied?.discount_amount ?? 0)), [cartTotal, promoApplied?.discount_amount]);
-  const strikeTotal = useMemo(() => grandTotal + DELIVERY_STRIKE_PHP, [grandTotal]);
+  const activeDeliveryFee = useMemo(
+    () => (deliveryMode === "delivery" ? effectiveRestaurant?.delivery_fee_php ?? 0 : 0),
+    [effectiveRestaurant?.delivery_fee_php, deliveryMode]
+  );
+  const standardDeliveryFee = useMemo(
+    () => effectiveRestaurant?.standard_delivery_fee_php ?? effectiveRestaurant?.delivery_fee_php ?? 0,
+    [effectiveRestaurant?.delivery_fee_php, effectiveRestaurant?.standard_delivery_fee_php]
+  );
+  const grandTotal = useMemo(
+    () => Math.max(0, cartTotal + activeDeliveryFee - (promoApplied?.discount_amount ?? 0)),
+    [activeDeliveryFee, cartTotal, promoApplied?.discount_amount]
+  );
+  const strikeTotal = useMemo(
+    () => (deliveryMode === "delivery" && activeDeliveryFee === 0 && standardDeliveryFee > 0 ? grandTotal + standardDeliveryFee : null),
+    [activeDeliveryFee, deliveryMode, grandTotal, standardDeliveryFee]
+  );
 
-  const dMin = cartRestaurant?.delivery_min_minutes ?? 5;
-  const dMax = cartRestaurant?.delivery_max_minutes ?? 20;
+  const dMin = effectiveRestaurant?.delivery_min_minutes ?? 5;
+  const dMax = effectiveRestaurant?.delivery_max_minutes ?? 20;
   const selectedLocation = savedLocations.find((location) => location.id === selectedLocationId) ?? null;
 
   const hasDeliveryAddress = deliveryAddress.trim().length > 0;
@@ -580,13 +614,13 @@ function CheckoutPageInner() {
     setPlacingOrder(true);
     try {
       const payload = {
-        restaurant_id: cartRestaurant.id,
+        restaurant_id: effectiveRestaurant?.id ?? cartRestaurant.id,
         delivery_mode: deliveryMode,
         payment_method: paymentMethod,
         promo_code: promoApplied?.code ?? null,
         delivery_address:
           deliveryMode === "pickup"
-            ? cartRestaurant.address?.trim() || "Pick-up at restaurant"
+            ? effectiveRestaurant?.address?.trim() || cartRestaurant.address?.trim() || "Pick-up at restaurant"
             : deliveryAddress.trim(),
         delivery_floor: deliveryMode === "delivery" ? selectedLocation?.floor?.trim() || null : null,
         delivery_note:
@@ -1002,13 +1036,13 @@ function CheckoutPageInner() {
                 )}
               </div>
 
-              {cartRestaurant ? (
+              {effectiveRestaurant ? (
                 <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
                   <div className="relative size-11 shrink-0 overflow-hidden rounded-lg border border-border/80 bg-muted">
-                    {publicFileUrl(cartRestaurant.profile_image_path, cartRestaurant.profile_image_url) ? (
+                    {publicFileUrl(effectiveRestaurant.profile_image_path, effectiveRestaurant.profile_image_url) ? (
                       /* eslint-disable-next-line @next/next/no-img-element */
                       <img
-                        src={publicFileUrl(cartRestaurant.profile_image_path, cartRestaurant.profile_image_url)!}
+                        src={publicFileUrl(effectiveRestaurant.profile_image_path, effectiveRestaurant.profile_image_url)!}
                         alt=""
                         className="size-full object-cover"
                       />
@@ -1019,7 +1053,7 @@ function CheckoutPageInner() {
                     )}
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-foreground">{cartRestaurant.name}</p>
+                    <p className="truncate text-sm font-semibold text-foreground">{effectiveRestaurant.name}</p>
                     <p className="text-xs text-muted-foreground">{cartCount} items</p>
                   </div>
                 </div>
@@ -1101,17 +1135,23 @@ function CheckoutPageInner() {
                 {deliveryMode === "delivery" ? (
                   <div className="flex justify-between gap-2">
                     <span className="text-muted-foreground">Standard delivery</span>
-                    <span className="text-right">
-                      <span className="text-xs text-muted-foreground line-through">
-                        {formatPhpSpaced(DELIVERY_STRIKE_PHP)}
-                      </span>{" "}
-                      <span className="font-semibold text-primary">Free</span>
-                    </span>
+                    {activeDeliveryFee === 0 ? (
+                      <span className="text-right">
+                        {standardDeliveryFee > 0 ? (
+                          <span className="text-xs text-muted-foreground line-through">
+                            {formatPhpSpaced(standardDeliveryFee)}
+                          </span>
+                        ) : null}{" "}
+                        <span className="font-semibold text-primary">Free</span>
+                      </span>
+                    ) : (
+                      <span className="font-semibold tabular-nums text-foreground">{formatPhpSpaced(activeDeliveryFee)}</span>
+                    )}
                   </div>
                 ) : null}
                 <div className="flex justify-between gap-2">
-                  <span className="text-muted-foreground">Service fee</span>
-                  <span className="font-medium tabular-nums text-foreground">{formatPhpSpaced(SERVICE_FEE_PHP)}</span>
+                  <span className="text-muted-foreground">Restaurant commission</span>
+                  <span className="text-right text-xs text-muted-foreground">Included in partner payout only</span>
                 </div>
                 {promoApplied ? (
                   <div className="flex justify-between gap-2">
@@ -1121,16 +1161,20 @@ function CheckoutPageInner() {
                 ) : null}
               </div>
 
-              <div className="border-t-4 border-primary bg-primary/10 px-4 py-3">
-                <div className="flex gap-2">
-                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                    <Check className="size-3.5" strokeWidth={3} />
-                  </span>
-                  <p className="text-sm font-medium leading-snug text-foreground">
-                    You&apos;ve got free delivery on your first order.
-                  </p>
+              {deliveryMode === "delivery" ? (
+                <div className="border-t-4 border-primary bg-primary/10 px-4 py-3">
+                  <div className="flex gap-2">
+                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                      <Check className="size-3.5" strokeWidth={3} />
+                    </span>
+                    <p className="text-sm font-medium leading-snug text-foreground">
+                      {activeDeliveryFee === 0
+                        ? "Delivery is currently free for this order."
+                        : `Standard delivery fee is ${formatPhpSpaced(activeDeliveryFee)}.`}
+                    </p>
+                  </div>
                 </div>
-              </div>
+              ) : null}
 
               <div className="border-t border-border/80 bg-muted/20 px-4 py-4">
                 <div className="flex items-start justify-between gap-3">
@@ -1140,7 +1184,9 @@ function CheckoutPageInner() {
                   </div>
                   <div className="text-right">
                     <p className="text-xl font-bold tabular-nums text-foreground">{formatPhpSpaced(grandTotal)}</p>
-                    <p className="text-xs text-muted-foreground line-through">{formatPhpSpaced(strikeTotal)}</p>
+                    {strikeTotal != null ? (
+                      <p className="text-xs text-muted-foreground line-through">{formatPhpSpaced(strikeTotal)}</p>
+                    ) : null}
                   </div>
                 </div>
                 <Button

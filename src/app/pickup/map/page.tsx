@@ -17,37 +17,34 @@ import {
 } from "@/lib/public-api";
 import { cn } from "@/lib/utils";
 
-declare global {
-  interface Window {
-    L?: LeafletRuntime;
-  }
-}
-
-type LeafletMap = {
+type PickupLeafletMap = {
   fitBounds: (bounds: unknown, options?: { padding?: [number, number] }) => void;
   setView: (center: [number, number], zoom: number) => void;
   flyTo: (center: [number, number], zoom: number, options?: { duration?: number }) => void;
+  invalidateSize: (options?: { pan?: boolean; debounceMoveend?: boolean }) => void;
+  remove: () => void;
 };
 
-type LeafletMarker = {
-  bindPopup: (html: string) => LeafletMarker;
+type PickupLeafletMarker = {
+  bindPopup: (html: string) => PickupLeafletMarker;
   on: (event: string, callback: () => void) => void;
   remove: () => void;
-  addTo: (map: LeafletMap) => LeafletMarker;
+  addTo: (map: PickupLeafletMap) => PickupLeafletMarker;
   openPopup: () => void;
 };
 
-type LeafletRuntime = {
+type PickupLeafletRuntime = {
   map: (
     element: HTMLElement,
-    options: { center: [number, number]; zoom: number; zoomControl: boolean }
-  ) => LeafletMap;
+    options: { center: [number, number]; zoom: number; zoomControl: boolean; preferCanvas?: boolean }
+  ) => PickupLeafletMap;
   tileLayer: (
     url: string,
-    options: { maxZoom: number; attribution: string }
-  ) => { addTo: (map: LeafletMap) => void };
-  marker: (coords: [number, number]) => LeafletMarker;
+    options: { maxZoom: number; attribution: string; subdomains?: string; detectRetina?: boolean }
+  ) => { addTo: (map: PickupLeafletMap) => void };
+  marker: (coords: [number, number], options?: { icon?: unknown }) => PickupLeafletMarker;
   latLngBounds: (coords: Array<[number, number]>) => unknown;
+  divIcon: (options: { className?: string; html?: string; iconSize?: [number, number]; iconAnchor?: [number, number] }) => unknown;
 };
 
 type GeocodeHit = {
@@ -82,9 +79,14 @@ async function geocodeAddress(address: string): Promise<{ lat: number; lon: numb
   return { lat: Number(data[0].lat), lon: Number(data[0].lon) };
 }
 
+function getLeafletRuntime(): PickupLeafletRuntime | undefined {
+  if (typeof window === "undefined") return undefined;
+  return (window as Window & { L?: PickupLeafletRuntime }).L;
+}
+
 function loadLeaflet(): Promise<void> {
   if (typeof window === "undefined") return Promise.resolve();
-  if (window.L) return Promise.resolve();
+  if (getLeafletRuntime()) return Promise.resolve();
 
   return new Promise((resolve, reject) => {
     const existingCss = document.querySelector('link[data-leaflet="1"]');
@@ -98,7 +100,7 @@ function loadLeaflet(): Promise<void> {
 
     const existingScript = document.querySelector('script[data-leaflet="1"]') as HTMLScriptElement | null;
     if (existingScript) {
-      if (window.L) resolve();
+      if (getLeafletRuntime()) resolve();
       else existingScript.addEventListener("load", () => resolve(), { once: true });
       return;
     }
@@ -110,6 +112,26 @@ function loadLeaflet(): Promise<void> {
     script.onload = () => resolve();
     script.onerror = () => reject(new Error("Could not load map library."));
     document.body.appendChild(script);
+  });
+}
+
+function restaurantPinIcon(L: PickupLeafletRuntime): unknown {
+  return L.divIcon({
+    className: "tk-restaurant-pin-icon",
+    html:
+      '<div style="position:relative;height:44px;width:34px;display:flex;align-items:flex-start;justify-content:center;">' +
+      '<span style="position:relative;display:flex;height:28px;width:28px;align-items:center;justify-content:center;border-radius:9999px;background:linear-gradient(180deg,#15803d,#166534);color:#ffffff;box-shadow:0 10px 18px rgba(22,101,52,0.28);border:2px solid #ffffff;">' +
+      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">' +
+      '<path d="M4 10.5V6.75C4 5.784 4.784 5 5.75 5H18.25C19.216 5 20 5.784 20 6.75V10.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '<path d="M6.5 10.5V19H17.5V10.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '<path d="M9 19V14H15V19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '<path d="M9 8H9.01M15 8H15.01" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '</svg>' +
+      '</span>' +
+      '<span style="position:absolute;top:25px;width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:12px solid #166534;"></span>' +
+      "</div>",
+    iconSize: [34, 44],
+    iconAnchor: [17, 40],
   });
 }
 
@@ -139,8 +161,19 @@ function PickupMapPageInner() {
   const [showSelectedOnly, setShowSelectedOnly] = useState(false);
 
   const mapRef = useRef<HTMLDivElement | null>(null);
-  const mapInstanceRef = useRef<LeafletMap | null>(null);
-  const markerRefs = useRef<Record<number, LeafletMarker>>({});
+  const mapInstanceRef = useRef<PickupLeafletMap | null>(null);
+  const markerRefs = useRef<Record<number, PickupLeafletMarker>>({});
+
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const observer = new ResizeObserver(() => {
+      mapInstanceRef.current?.invalidateSize({ pan: false });
+    });
+    observer.observe(mapRef.current);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -257,9 +290,9 @@ function PickupMapPageInner() {
       if (!mapRef.current) return;
       try {
         await loadLeaflet();
-        if (cancelled || !mapRef.current || !window.L) return;
+        const L = getLeafletRuntime();
+        if (cancelled || !mapRef.current || !L) return;
 
-        const L = window.L;
         const defaultCenter: [number, number] =
           !Number.isNaN(initialLat) && !Number.isNaN(initialLng)
             ? [initialLat, initialLng]
@@ -272,19 +305,28 @@ function PickupMapPageInner() {
             center: defaultCenter,
             zoom: 13,
             zoomControl: true,
+            preferCanvas: true,
           });
           L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
             maxZoom: 19,
             attribution: "&copy; OpenStreetMap contributors",
+            subdomains: "abc",
+            detectRetina: true,
           }).addTo(mapInstanceRef.current);
         }
 
         const map = mapInstanceRef.current;
+        if (!map) return;
+        const restaurantIcon = restaurantPinIcon(L);
+        map.invalidateSize({ pan: false });
+        window.setTimeout(() => {
+          mapInstanceRef.current?.invalidateSize({ pan: false });
+        }, 160);
         Object.values(markerRefs.current).forEach((marker) => marker.remove());
         markerRefs.current = {};
 
         for (const point of mappablePoints) {
-          const marker = L.marker([point.lat, point.lon]).addTo(map);
+          const marker = L.marker([point.lat, point.lon], { icon: restaurantIcon }).addTo(map);
           marker.bindPopup(`<strong>${point.restaurant.name}</strong><br/>${point.restaurant.address ?? ""}`);
           marker.on("click", () => {
             setSelectedId(point.restaurant.id);
@@ -344,6 +386,15 @@ function PickupMapPageInner() {
       cancelled = true;
     };
   }, [selectedId, points]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(markerRefs.current).forEach((marker) => marker.remove());
+      markerRefs.current = {};
+      mapInstanceRef.current?.remove();
+      mapInstanceRef.current = null;
+    };
+  }, []);
 
   return (
     <div className="flex min-h-screen flex-col bg-muted/20">
@@ -539,13 +590,13 @@ function PickupMapPageInner() {
             </div>
           </aside>
 
-          <section className="overflow-hidden rounded-2xl border border-border/70 bg-white shadow-sm">
+          <section className="relative isolate z-0 overflow-hidden rounded-2xl border border-border/70 bg-white shadow-sm">
             {mapError ? (
               <div className="flex size-full items-center justify-center px-6 text-sm text-destructive">
                 {mapError}
               </div>
             ) : (
-              <div ref={mapRef} className="size-full min-h-[560px]" />
+              <div ref={mapRef} className="relative z-0 size-full min-h-[560px]" />
             )}
             {!loading && mappablePoints.length > 1 ? (
               <div className="border-t border-border/70 bg-muted/30 px-4 py-2 text-xs text-muted-foreground">

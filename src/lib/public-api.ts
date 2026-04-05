@@ -55,9 +55,11 @@ function messageFromParsed(data: {
 }
 
 async function publicFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const isFormData =
+    typeof FormData !== "undefined" && options.body instanceof FormData;
   const headers: HeadersInit = {
     Accept: "application/json",
-    ...(options.body ? { "Content-Type": "application/json" } : {}),
+    ...(!isFormData && options.body ? { "Content-Type": "application/json" } : {}),
     ...options.headers,
   };
 
@@ -140,15 +142,32 @@ export interface RiderApplicationPayload {
   address?: string | null;
   vehicle_type?: string | null;
   license_number?: string | null;
+  id_document?: File | null;
+  license_document?: File | null;
+  id_document_url?: string | null;
+  license_document_url?: string | null;
   notes?: string | null;
 }
 
 export function submitRiderApplication(
   payload: RiderApplicationPayload
 ): Promise<{ message: string; id: number }> {
+  const body = new FormData();
+  body.append("name", payload.name);
+  body.append("email", payload.email);
+  body.append("phone", payload.phone);
+  if (payload.address) body.append("address", payload.address);
+  if (payload.vehicle_type) body.append("vehicle_type", payload.vehicle_type);
+  if (payload.license_number) body.append("license_number", payload.license_number);
+  if (payload.id_document) body.append("id_document", payload.id_document);
+  if (payload.license_document) body.append("license_document", payload.license_document);
+  if (payload.id_document_url) body.append("id_document_url", payload.id_document_url);
+  if (payload.license_document_url) body.append("license_document_url", payload.license_document_url);
+  if (payload.notes) body.append("notes", payload.notes);
+
   return publicFetch("/rider-applications", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body,
   });
 }
 
@@ -212,6 +231,7 @@ export interface PublicRestaurant {
   delivery_min_minutes?: number;
   delivery_max_minutes?: number;
   delivery_fee_php?: number;
+  standard_delivery_fee_php?: number;
   free_delivery_min_spend_php?: number;
   price_level?: number;
   promo_label?: string | null;
@@ -239,6 +259,9 @@ export interface PublicMenuItem {
   name: string;
   description: string | null;
   price: string;
+  original_price?: number;
+  has_discount?: boolean;
+  discount_percent?: number;
   image_path: string | null;
   image_url: string | null;
   rating?: number;

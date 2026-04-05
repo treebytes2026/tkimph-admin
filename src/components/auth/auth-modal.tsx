@@ -74,6 +74,10 @@ export function AuthModal() {
       const res = await loginCustomer({ email, password });
       if (res.user.role === "restaurant_owner") {
         router.push("/partner/dashboard");
+      } else if (res.user.role === "admin") {
+        router.push("/dashboard");
+      } else if (res.user.role === "rider") {
+        router.push("/rider/dashboard");
       } else {
         router.push("/");
       }
@@ -134,8 +138,7 @@ export function AuthModal() {
             </p>
           </div>
           <p className="mx-auto mt-8 max-w-[16rem] text-center text-lg font-semibold leading-snug md:text-xl">
-            Download the app for{" "}
-            <span className="text-brand-yellow">free delivery</span> on your first order.
+            Download the app for faster checkout, saved addresses, and exclusive offers.
           </p>
         </div>
         <div className="relative mt-8 flex flex-col gap-2 md:mt-0">

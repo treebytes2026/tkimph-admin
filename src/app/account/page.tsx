@@ -99,6 +99,10 @@ export default function AccountPage() {
         router.replace("/dashboard");
         return;
       }
+      if (u.role === "rider") {
+        router.replace("/rider/dashboard");
+        return;
+      }
       setUser(u);
     };
     applyAuth();

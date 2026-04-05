@@ -482,14 +482,14 @@ export function RestaurantsManagement() {
 
                   <Card className="border-border/60">
                     <CardHeader>
-                      <CardTitle className="flex items-center gap-2 text-base"><Wallet className="size-4" /> Settlement summary</CardTitle>
+                      <CardTitle className="flex items-center gap-2 text-base"><Wallet className="size-4" /> Revenue summary</CardTitle>
                     </CardHeader>
                     <CardContent className="grid gap-3 sm:grid-cols-2">
                       <div className="rounded-xl border border-border/60 p-3"><p className="text-xs text-muted-foreground">Orders</p><p className="text-xl font-semibold">{settlement?.order_count ?? 0}</p></div>
                       <div className="rounded-xl border border-border/60 p-3"><p className="text-xs text-muted-foreground">Gross sales</p><p className="text-xl font-semibold">{formatMoney(settlement?.gross_sales ?? 0)}</p></div>
-                      <div className="rounded-xl border border-border/60 p-3"><p className="text-xs text-muted-foreground">Service fees</p><p className="text-xl font-semibold">{formatMoney(settlement?.service_fees ?? 0)}</p></div>
+                      <div className="rounded-xl border border-border/60 p-3"><p className="text-xs text-muted-foreground">Platform commission</p><p className="text-xl font-semibold">{formatMoney(settlement?.platform_commission ?? 0)}</p></div>
                       <div className="rounded-xl border border-border/60 p-3"><p className="text-xs text-muted-foreground">Restaurant net</p><p className="text-xl font-semibold">{formatMoney(settlement?.restaurant_net ?? 0)}</p></div>
-                      <div className="rounded-xl border border-border/60 p-3 sm:col-span-2"><p className="text-xs text-muted-foreground">Pending settlement amount</p><p className="text-xl font-semibold">{formatMoney(settlement?.pending_settlement_amount ?? 0)}</p></div>
+                      <div className="rounded-xl border border-border/60 p-3 sm:col-span-2"><p className="text-xs text-muted-foreground">Commission model</p><p className="text-xl font-semibold">{((settlement?.commission_rate ?? 0) * 100).toFixed(0)}%</p></div>
                     </CardContent>
                   </Card>
 

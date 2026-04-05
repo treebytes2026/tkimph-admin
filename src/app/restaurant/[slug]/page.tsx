@@ -51,26 +51,6 @@ function formatPhpSpaced(amount: number): string {
   return `\u20B1 ${s}`;
 }
 
-function promoAdjustedPrice(item: PublicMenuItem, restaurant: PublicRestaurant | null): number | null {
-  const base = Number(item.price);
-  if (!Number.isFinite(base) || base <= 0 || !restaurant) return null;
-  const promos = restaurant.promotions ?? [];
-  if (promos.length === 0) return null;
-
-  const promo = promos.find((p) => p.min_spend <= base);
-  if (!promo) return null;
-
-  const raw =
-    promo.discount_type === "percentage"
-      ? base * (promo.discount_value / 100)
-      : promo.discount_value;
-  const capped = promo.max_discount_amount != null ? Math.min(raw, promo.max_discount_amount) : raw;
-  const discount = Math.max(0, Math.min(base, capped));
-  const next = Math.max(0, base - discount);
-
-  return next < base ? next : null;
-}
-
 export default function RestaurantDetailPage() {
   return (
     <Suspense>
@@ -195,6 +175,7 @@ function RestaurantDetailPageInner() {
   const profileSrc = restaurant
     ? publicFileUrl(restaurant.profile_image_path, restaurant.profile_image_url)
     : null;
+  const deliveryFee = restaurant?.delivery_fee_php ?? 0;
 
   const cuisineLine = [restaurant?.cuisine?.name, restaurant?.business_type?.name].filter(Boolean).join(" | ");
   const restaurantRating = restaurant?.rating ?? 0;
@@ -265,9 +246,9 @@ function RestaurantDetailPageInner() {
                   <div className="mt-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm md:justify-start">
                     <span className="flex items-center gap-1.5 font-semibold text-primary">
                       <Bike className="size-4 shrink-0" />
-                      Free delivery on first order
+                      {deliveryFee === 0 ? "Delivery is free right now" : `Delivery fee ${formatPhp(deliveryFee)}`}
                     </span>
-                    <span className="text-muted-foreground">Min. order {formatPhp(99)}</span>
+                    <span className="text-muted-foreground">Checkout total updates before you place the order</span>
                   </div>
                   <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-sm md:justify-start">
                     <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
@@ -469,7 +450,10 @@ function RestaurantDetailPageInner() {
                           {group.items.map((item) => {
                             const img = publicFileUrl(item.image_path, item.image_url);
                             const line = cart.find((l) => l.item.id === item.id);
-                            const adjusted = promoAdjustedPrice(item, restaurant);
+                            const hasDiscount =
+                              Boolean(item.has_discount) &&
+                              typeof item.original_price === "number" &&
+                              item.original_price > Number(item.price);
                             return (
                               <article
                                 key={item.id}
@@ -489,13 +473,18 @@ function RestaurantDetailPageInner() {
                                     {item.name}
                                   </h3>
                                   <p className="text-sm">
-                                    <span className="font-semibold text-primary">from {formatPhp(adjusted ?? item.price)}</span>
-                                    {adjusted != null ? (
+                                    <span className="font-semibold text-primary">{formatPhp(item.price)}</span>
+                                    {hasDiscount ? (
                                       <span className="ml-2 text-xs text-muted-foreground line-through">
-                                        from {formatPhp(item.price)}
+                                        {formatPhp(item.original_price!)}
                                       </span>
                                     ) : null}
                                   </p>
+                                  {hasDiscount ? (
+                                    <p className="text-[11px] font-semibold text-emerald-700">
+                                      {item.discount_percent}% off on this dish
+                                    </p>
+                                  ) : null}
                                   {item.description ? (
                                     <p className="line-clamp-3 text-xs leading-relaxed text-muted-foreground">
                                       {item.description}
@@ -743,7 +732,6 @@ function RestaurantDetailPageInner() {
               open={infoModalOpen}
               onOpenChange={setInfoModalOpen}
               restaurant={restaurant}
-              minimumOrderPeso={99}
             />
             <RestaurantReviewsModal
               open={reviewsModalOpen}

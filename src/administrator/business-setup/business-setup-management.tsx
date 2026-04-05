@@ -25,12 +25,12 @@ import {
   type MenuCategoryRow,
 } from "@/lib/admin-api";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { LayoutList, Loader2, Plus, Pencil, Trash2, Tags, UtensilsCrossed, Store } from "lucide-react";
+import { LayoutList, Loader2, Plus, Pencil, Trash2, Tags, UtensilsCrossed, Store, Sparkles, Layers3, ChevronRight } from "lucide-react";
 
 /** Toggle for “show on partner registration” (maps to API `is_active`). */
 function RegistrationToggle({
@@ -65,6 +65,28 @@ function RegistrationToggle({
         />
       </button>
       <span className="text-sm font-medium text-foreground">{label}</span>
+    </div>
+  );
+}
+
+function SectionIntro({
+  icon: Icon,
+  title,
+  description,
+}: {
+  icon: typeof Store;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-primary/15 bg-primary/[0.08] text-primary shadow-sm">
+        <Icon className="size-5" />
+      </div>
+      <div>
+        <h2 className="text-lg font-semibold tracking-tight text-foreground">{title}</h2>
+        <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p>
+      </div>
     </div>
   );
 }
@@ -104,21 +126,50 @@ export function BusinessSetupManagement() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Business setup</h1>
-        <p className="text-sm text-muted-foreground">
-          Manage business types, categories (per type), cuisines for registration, and menu categories partners use when
-          building menus.
-        </p>
+      <div className="relative overflow-hidden rounded-3xl border border-primary/15 bg-[linear-gradient(135deg,rgba(255,255,255,1),rgba(248,250,252,1),rgba(255,247,237,1))] p-6 shadow-sm sm:p-8">
+        <div className="absolute right-0 top-0 h-36 w-36 translate-x-1/4 -translate-y-1/4 rounded-full bg-primary/10 blur-3xl" aria-hidden />
+        <div className="absolute bottom-0 left-0 h-28 w-28 -translate-x-1/4 translate-y-1/4 rounded-full bg-orange-200/35 blur-3xl" aria-hidden />
+        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl">
+            <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-primary shadow-sm">
+              <Sparkles className="size-3.5" />
+              Registration setup
+            </div>
+            <h1 className="mt-4 text-3xl font-bold tracking-tight text-foreground">Business setup</h1>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Manage the options partners see during signup and the menu categories they use to structure their stores.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-4">
+            <div className="rounded-2xl border border-border/70 bg-white/85 px-4 py-3 shadow-sm"><p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Types</p><p className="mt-1 text-xl font-semibold text-foreground">{types.length}</p></div>
+            <div className="rounded-2xl border border-border/70 bg-white/85 px-4 py-3 shadow-sm"><p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Categories</p><p className="mt-1 text-xl font-semibold text-foreground">{categories.length}</p></div>
+            <div className="rounded-2xl border border-border/70 bg-white/85 px-4 py-3 shadow-sm"><p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Cuisines</p><p className="mt-1 text-xl font-semibold text-foreground">{cuisines.length}</p></div>
+            <div className="rounded-2xl border border-border/70 bg-white/85 px-4 py-3 shadow-sm"><p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Menu groups</p><p className="mt-1 text-xl font-semibold text-foreground">{menuCategories.length}</p></div>
+          </div>
+        </div>
       </div>
 
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      <Card className="border-border/70 shadow-sm">
+        <CardContent className="grid gap-4 py-5 md:grid-cols-3">
+          <div className="rounded-2xl border border-border/70 bg-white px-4 py-4 shadow-sm">
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground"><Store className="size-4 text-primary" />Partner signup</div>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">Control which business options appear when restaurants apply to join the platform.</p>
+          </div>
+          <div className="rounded-2xl border border-border/70 bg-white px-4 py-4 shadow-sm">
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground"><Layers3 className="size-4 text-primary" />Reusable structure</div>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">Keep categories and cuisines tidy so restaurants can complete setup faster and with less confusion.</p>
+          </div>
+          <div className="rounded-2xl border border-border/70 bg-white px-4 py-4 shadow-sm">
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground"><ChevronRight className="size-4 text-primary" />Safer changes</div>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">Hide options from registration before deleting them, especially when existing stores may still reference them.</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {error ? <p className="rounded-2xl border border-destructive/25 bg-destructive/5 px-4 py-3 text-sm text-destructive">{error}</p> : null}
 
       {loading ? (
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <Loader2 className="size-5 animate-spin" />
-          Loading…
-        </div>
+        <Card className="border-border/70"><CardContent className="flex items-center gap-3 py-10 text-sm text-muted-foreground"><Loader2 className="size-5 animate-spin text-primary" />Loading setup data...</CardContent></Card>
       ) : (
         <>
           <BusinessTypesSection types={types} onRefresh={load} />
@@ -212,18 +263,9 @@ function BusinessTypesSection({
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0">
-        <div className="space-y-1">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Tags className="size-5" />
-            Business types
-          </CardTitle>
-          <CardDescription>
-            Controls partner registration: inactive types are hidden. &quot;Requires cuisine&quot; shows the cuisine
-            dropdown when that type is selected.
-          </CardDescription>
-        </div>
+    <Card className="border-border/70 shadow-sm">
+      <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <SectionIntro icon={Tags} title="Business types" description='Top-level business options shown to partners during registration. "Requires cuisine" controls whether the cuisine field appears for that type.' />
         <Button type="button" size="sm" variant="outline" onClick={() => setCreating(!creating)}>
           <Plus className="mr-1 size-4" />
           Add
@@ -231,7 +273,7 @@ function BusinessTypesSection({
       </CardHeader>
       <CardContent className="space-y-4">
         {creating ? (
-          <form onSubmit={handleCreate} className="grid gap-3 rounded-xl border border-border/60 bg-muted/20 p-4 sm:grid-cols-2">
+          <form onSubmit={handleCreate} className="grid gap-3 rounded-2xl border border-border/70 bg-muted/20 p-4 sm:grid-cols-2">
             <div className="grid gap-1.5 sm:col-span-2">
               <Label htmlFor="bt_name">Name</Label>
               <Input id="bt_name" required value={name} onChange={(e) => setName(e.target.value)} />
@@ -269,7 +311,7 @@ function BusinessTypesSection({
         {editing ? (
           <form
             onSubmit={saveEdit}
-            className="space-y-4 rounded-xl border border-primary/25 bg-primary/[0.04] p-4 shadow-sm"
+            className="space-y-4 rounded-2xl border border-primary/25 bg-primary/[0.04] p-4 shadow-sm"
           >
             <div className="flex items-center justify-between gap-2">
               <p className="font-semibold text-foreground">Edit {editing.name}</p>
@@ -313,7 +355,7 @@ function BusinessTypesSection({
           </form>
         ) : null}
 
-        <ul className="divide-y divide-border/60 rounded-xl border border-border/60">
+        <ul className="divide-y divide-border/60 rounded-2xl border border-border/60 bg-white shadow-sm">
           {types.map((t) => (
             <li key={t.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
               <div className="min-w-0">
@@ -356,6 +398,11 @@ function BusinessTypesSection({
               </div>
             </li>
           ))}
+          {types.length === 0 ? (
+            <li className="px-4 py-10 text-center text-sm text-muted-foreground">
+              No business types yet. Add your first type to start shaping the registration flow.
+            </li>
+          ) : null}
         </ul>
       </CardContent>
     </Card>
@@ -429,15 +476,9 @@ function BusinessCategoriesSection({
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0">
-        <div className="space-y-1">
-          <CardTitle className="text-lg">Business categories</CardTitle>
-          <CardDescription>
-            Categories are scoped to a business type (e.g. Fast food under Restaurant). Turn off
-            &quot;On registration&quot; to hide a category from the partner signup form.
-          </CardDescription>
-        </div>
+    <Card className="border-border/70 shadow-sm">
+      <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <SectionIntro icon={Store} title="Business categories" description='Categories sit under each business type, like "Fast food" under "Restaurant". Hide them from registration before deleting them.' />
         <Button type="button" size="sm" variant="outline" onClick={() => setCreating(!creating)}>
           <Plus className="mr-1 size-4" />
           Add
@@ -445,7 +486,7 @@ function BusinessCategoriesSection({
       </CardHeader>
       <CardContent className="space-y-4">
         {creating ? (
-          <form onSubmit={handleCreate} className="grid gap-3 rounded-xl border border-border/60 bg-muted/20 p-4 sm:grid-cols-2">
+          <form onSubmit={handleCreate} className="grid gap-3 rounded-2xl border border-border/70 bg-muted/20 p-4 sm:grid-cols-2">
             <div className="grid gap-1.5">
               <Label>Type</Label>
               <select
@@ -482,7 +523,7 @@ function BusinessCategoriesSection({
               .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
             if (forType.length === 0) return null;
             return (
-              <div key={type.id} className="overflow-hidden rounded-xl border border-border/60 bg-muted/20">
+              <div key={type.id} className="overflow-hidden rounded-2xl border border-border/60 bg-muted/20 shadow-sm">
                 <div className="flex items-center gap-2 border-b border-border/60 bg-card/80 px-4 py-3">
                   <Store className="size-4 shrink-0 text-primary" />
                   <div className="min-w-0">
@@ -527,7 +568,7 @@ function BusinessCategoriesSection({
         </div>
 
         {categories.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No categories yet. Add one above.</p>
+          <p className="rounded-2xl border border-dashed border-border/70 bg-muted/15 px-4 py-6 text-center text-sm text-muted-foreground">No business categories yet. Add one above and assign it to a business type.</p>
         ) : null}
       </CardContent>
     </Card>
@@ -595,18 +636,9 @@ function CuisinesSection({
   );
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0">
-        <div className="space-y-1">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <UtensilsCrossed className="size-5" />
-            Cuisines
-          </CardTitle>
-          <CardDescription>
-            When a business type requires cuisine, partners pick from this list on registration. Turn off
-            &quot;On registration&quot; to hide a cuisine from signup without deleting it.
-          </CardDescription>
-        </div>
+    <Card className="border-border/70 shadow-sm">
+      <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <SectionIntro icon={UtensilsCrossed} title="Cuisines" description='Partners choose from this list when their business type requires cuisine. You can hide cuisines from registration without deleting them.' />
         <Button type="button" size="sm" variant="outline" onClick={() => setCreating(!creating)}>
           <Plus className="mr-1 size-4" />
           Add
@@ -614,7 +646,7 @@ function CuisinesSection({
       </CardHeader>
       <CardContent className="space-y-4">
         {creating ? (
-          <form onSubmit={handleCreate} className="flex flex-wrap items-end gap-3 rounded-xl border border-border/60 bg-muted/20 p-4">
+          <form onSubmit={handleCreate} className="flex flex-wrap items-end gap-3 rounded-2xl border border-border/70 bg-muted/20 p-4">
             <div className="grid min-w-[200px] flex-1 gap-1.5">
               <Label htmlFor="cu_name">Name</Label>
               <Input id="cu_name" required value={name} onChange={(e) => setName(e.target.value)} />
@@ -628,7 +660,7 @@ function CuisinesSection({
           </form>
         ) : null}
 
-        <ul className="divide-y divide-border/60 rounded-xl border border-border/60">
+        <ul className="divide-y divide-border/60 rounded-2xl border border-border/60 bg-white shadow-sm">
           {sortedCuisines.length === 0 ? (
             <li className="px-4 py-8 text-center text-sm text-muted-foreground">No cuisines yet. Add one above.</li>
           ) : null}
@@ -728,18 +760,9 @@ function MenuCategoriesSection({
   );
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0">
-        <div className="space-y-1">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <LayoutList className="size-5" />
-            Menu categories
-          </CardTitle>
-          <CardDescription>
-            Partners assign dishes to these sections (e.g. Appetizers, Main course). Turn off availability to hide a
-            category from the partner menu builder without deleting it.
-          </CardDescription>
-        </div>
+    <Card className="border-border/70 shadow-sm">
+      <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <SectionIntro icon={LayoutList} title="Menu categories" description='Reusable menu sections partners use in the builder, such as "Appetizers" or "Main course". Hide them first before deleting.' />
         <Button type="button" size="sm" variant="outline" onClick={() => setCreating(!creating)}>
           <Plus className="mr-1 size-4" />
           Add
@@ -747,7 +770,7 @@ function MenuCategoriesSection({
       </CardHeader>
       <CardContent className="space-y-4">
         {creating ? (
-          <form onSubmit={handleCreate} className="flex flex-wrap items-end gap-3 rounded-xl border border-border/60 bg-muted/20 p-4">
+          <form onSubmit={handleCreate} className="flex flex-wrap items-end gap-3 rounded-2xl border border-border/70 bg-muted/20 p-4">
             <div className="grid min-w-[200px] flex-1 gap-1.5">
               <Label htmlFor="mc_name">Name</Label>
               <Input id="mc_name" required value={name} onChange={(e) => setName(e.target.value)} />
@@ -761,7 +784,7 @@ function MenuCategoriesSection({
           </form>
         ) : null}
 
-        <ul className="divide-y divide-border/60 rounded-xl border border-border/60">
+        <ul className="divide-y divide-border/60 rounded-2xl border border-border/60 bg-white shadow-sm">
           {sorted.length === 0 ? (
             <li className="px-4 py-8 text-center text-sm text-muted-foreground">
               No menu categories yet. Add one above.

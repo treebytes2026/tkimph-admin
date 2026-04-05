@@ -9,9 +9,11 @@ export const metadata: Metadata = {
   description: "TKimph Admin Dashboard",
   icons: {
     icon: [
-      { url: "/tkimlogo.png?v=20260328", type: "image/png" },
+      { url: "/favicon.ico?v=20260405b", type: "image/x-icon" },
+      { url: "/tkimlogo.png?v=20260405b", type: "image/png" },
     ],
-    apple: [{ url: "/tkimlogo.png?v=20260328", type: "image/png" }],
+    shortcut: [{ url: "/favicon.ico?v=20260405b", type: "image/x-icon" }],
+    apple: [{ url: "/tkimlogo.png?v=20260405b", type: "image/png" }],
   },
 };
 
@@ -22,7 +24,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full antialiased">
-      <body className="min-h-full flex flex-col">
+      <body suppressHydrationWarning className="min-h-full flex flex-col">
         <TooltipProvider>
           <Providers>{children}</Providers>
           <Toaster />

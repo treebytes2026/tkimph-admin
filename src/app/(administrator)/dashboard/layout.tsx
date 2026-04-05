@@ -32,6 +32,7 @@ import {
   Store,
   Bike,
   ShoppingBag,
+  Wallet,
   Settings,
   LogOut,
   Menu,
@@ -39,6 +40,7 @@ import {
   ClipboardList,
   Tags,
   UserCircle,
+  MessageSquareWarning,
 } from "lucide-react";
 
 const navigation = [
@@ -50,6 +52,8 @@ const navigation = [
   { name: "Business setup", href: "/dashboard/business-setup", icon: Tags },
   { name: "Riders", href: "/dashboard/riders", icon: UserCircle },
   { name: "Orders", href: "/dashboard/orders", icon: ShoppingBag },
+  { name: "Commissions", href: "/dashboard/commissions", icon: Wallet },
+  { name: "Help center", href: "/dashboard/help-center", icon: MessageSquareWarning },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 
