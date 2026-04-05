@@ -35,26 +35,6 @@ function formatPhp(amount: string | number): string {
   return `\u20B1${n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function promoAdjustedPrice(item: PublicMenuItem, restaurant: PublicRestaurant): number | null {
-  const base = Number(item.price);
-  if (!Number.isFinite(base) || base <= 0) return null;
-  const promos = restaurant.promotions ?? [];
-  if (promos.length === 0) return null;
-
-  const promo = promos.find((p) => p.min_spend <= base);
-  if (!promo) return null;
-
-  const raw =
-    promo.discount_type === "percentage"
-      ? base * (promo.discount_value / 100)
-      : promo.discount_value;
-  const capped = promo.max_discount_amount != null ? Math.min(raw, promo.max_discount_amount) : raw;
-  const discount = Math.max(0, Math.min(base, capped));
-  const next = Math.max(0, base - discount);
-
-  return next < base ? next : null;
-}
-
 type DishFeedEntry = {
   item: PublicMenuItem;
   restaurant: PublicRestaurant;
@@ -96,12 +76,11 @@ function DishFoodpandaCardInner({ item, restaurant }: DishFeedEntry) {
   const dMin = restaurant.delivery_min_minutes ?? 20;
   const dMax = restaurant.delivery_max_minutes ?? 40;
   const fee = restaurant.delivery_fee_php ?? 49;
-  const freeMin = restaurant.free_delivery_min_spend_php ?? 299;
   const level = restaurant.price_level ?? 2;
   const cuisine = restaurant.cuisine?.name ?? "Food";
   const promo = restaurant.promo_label;
   const isAd = restaurant.is_ad ?? false;
-  const adjusted = promoAdjustedPrice(item, restaurant);
+  const hasDiscount = Boolean(item.has_discount) && (item.original_price ?? 0) > Number(item.price);
 
   const inner = (
     <>
@@ -142,19 +121,25 @@ function DishFoodpandaCardInner({ item, restaurant }: DishFeedEntry) {
           </div>
         </div>
         <p className="mt-1 text-sm">
-          <span className="font-semibold text-primary">from {formatPhp(adjusted ?? item.price)}</span>
-          {adjusted != null ? (
-            <span className="ml-2 text-xs text-muted-foreground line-through">from {formatPhp(item.price)}</span>
+          <span className="font-semibold text-primary">{formatPhp(item.price)}</span>
+          {hasDiscount ? (
+            <span className="ml-2 text-xs text-muted-foreground line-through">
+              {formatPhp(item.original_price ?? item.price)}
+            </span>
           ) : null}
         </p>
         <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
           {dMin}–{dMax} min · {priceLevelSymbols(level)} · {cuisine}
         </p>
+        {hasDiscount ? (
+          <p className="mt-1 text-xs font-semibold text-emerald-700">
+            {item.discount_percent}% off on this dish
+          </p>
+        ) : null}
         <p className="mt-2 flex flex-wrap items-baseline gap-x-1 gap-y-0.5 text-xs leading-snug">
           <Bike className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
-          <span className="font-medium text-foreground">{formatPesoInt(fee)}</span>
-          <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-            or Free with {formatPesoInt(freeMin)} spend
+          <span className="font-medium text-foreground">
+            {fee === 0 ? "Free delivery" : `Delivery ${formatPesoInt(fee)}`}
           </span>
         </p>
         {promo ? (

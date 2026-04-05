@@ -170,10 +170,31 @@ export interface CustomerOrder {
     profile_image_path: string | null;
     profile_image_url: string | null;
   } | null;
+  rider: {
+    id: number;
+    name: string;
+    phone: string | null;
+  } | null;
   items: CustomerOrderItem[];
   discounts: CustomerOrderDiscount[];
   issues: CustomerOrderIssue[];
   review: CustomerOrderReview | null;
+  timeline: Array<{
+    id: number;
+    event_type: string;
+    from_status: string | null;
+    to_status: string | null;
+    note: string | null;
+    actor: { id: number; name: string; role: string } | null;
+    meta: Record<string, unknown> | null;
+    created_at: string | null;
+  }>;
+  live_location: {
+    latitude: number;
+    longitude: number;
+    accuracy_meters: number | null;
+    recorded_at: string | null;
+  } | null;
 }
 
 export function fetchCustomerProfile(): Promise<CustomerProfile> {
@@ -348,4 +369,15 @@ export function fetchCustomerOrders(perPage = 10): Promise<{
     per_page: number;
     total: number;
   }>(`/customer/orders?per_page=${perPage}`);
+}
+
+export function fetchCustomerOrder(orderId: number): Promise<{ order: CustomerOrder }> {
+  return customerRequest<{ order: CustomerOrder }>(`/customer/orders/${orderId}`);
+}
+
+export function submitCustomerHelpCenterConcern(payload: { subject: string; message: string }): Promise<{ message: string }> {
+  return customerRequest<{ message: string }>("/customer/help-center", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }

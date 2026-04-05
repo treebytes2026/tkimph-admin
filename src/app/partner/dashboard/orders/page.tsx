@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,7 +13,7 @@ import {
   updatePartnerOrderStatus,
 } from "@/lib/partner-api";
 import { cn } from "@/lib/utils";
-import { Loader2, Phone, Store, UserRound } from "lucide-react";
+import { BellRing, Clock3, Loader2, Phone, ShieldAlert, Store, Truck, UserRound } from "lucide-react";
 
 const FILTERS = [
   { value: "all", label: "All" },
@@ -45,6 +45,19 @@ export default function PartnerOrdersPage() {
   const [orders, setOrders] = useState<PartnerOrder[]>([]);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [reasonDrafts, setReasonDrafts] = useState<Record<number, string>>({});
+  const orderSummary = useMemo(() => {
+    const counts = {
+      pending: 0,
+      preparing: 0,
+      out_for_delivery: 0,
+    };
+    for (const order of orders) {
+      if (order.status === "pending") counts.pending += 1;
+      if (order.status === "preparing") counts.preparing += 1;
+      if (order.status === "out_for_delivery") counts.out_for_delivery += 1;
+    }
+    return counts;
+  }, [orders]);
 
   useEffect(() => {
     let cancelled = false;
@@ -95,9 +108,7 @@ export default function PartnerOrdersPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Orders</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            New orders auto-refresh every 5 seconds.
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">Live order board for incoming, kitchen, and dispatch activity.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {FILTERS.map((f) => (
@@ -114,10 +125,62 @@ export default function PartnerOrdersPage() {
         </div>
       </div>
 
+      <div className="grid gap-3 lg:grid-cols-[1.5fr_repeat(3,1fr)]">
+        <Card className="overflow-hidden border-border/70 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white shadow-lg">
+          <CardContent className="flex items-start justify-between gap-4 p-5">
+            <div>
+              <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">
+                <BellRing className="size-4" />
+                Notification flow
+              </p>
+              <p className="mt-3 text-lg font-semibold">Order updates are refreshing every 5 seconds.</p>
+              <p className="mt-1 text-sm text-slate-300">
+                New order alerts are marked read here automatically so your queue stays clean while you work.
+              </p>
+            </div>
+            <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-slate-100">
+              <span className="size-2 rounded-full bg-emerald-400" />
+              Live board
+            </span>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/70 shadow-sm">
+          <CardContent className="p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pending now</p>
+            <p className="mt-2 text-3xl font-bold tracking-tight text-foreground">{orderSummary.pending}</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/70 shadow-sm">
+          <CardContent className="p-4">
+            <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <Clock3 className="size-4 text-amber-500" />
+              Preparing
+            </p>
+            <p className="mt-2 text-3xl font-bold tracking-tight text-foreground">{orderSummary.preparing}</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/70 shadow-sm">
+          <CardContent className="p-4">
+            <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <Truck className="size-4 text-sky-600" />
+              Out for delivery
+            </p>
+            <p className="mt-2 text-3xl font-bold tracking-tight text-foreground">{orderSummary.out_for_delivery}</p>
+          </CardContent>
+        </Card>
+      </div>
+
       {error ? (
-        <p className="rounded-xl border border-destructive/25 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-          {error}
-        </p>
+        <div className="flex items-start gap-3 rounded-2xl border border-destructive/25 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          <ShieldAlert className="mt-0.5 size-4 shrink-0" />
+          <div>
+            <p className="font-semibold">Notification or order sync issue</p>
+            <p className="mt-1">{error}</p>
+          </div>
+        </div>
       ) : null}
 
       {loading ? (

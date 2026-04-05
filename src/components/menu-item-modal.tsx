@@ -84,6 +84,10 @@ export function MenuItemModal({
   if (!mounted || !activeItem) return null;
 
   const img = publicFileUrl(activeItem.image_path, activeItem.image_url);
+  const hasDiscount =
+    Boolean(activeItem.has_discount) &&
+    typeof activeItem.original_price === "number" &&
+    activeItem.original_price > Number(activeItem.price);
 
   const node = (
     <div className="fixed inset-0 z-[90] flex items-end justify-center sm:items-center sm:p-4">
@@ -130,9 +134,21 @@ export function MenuItemModal({
           <h2 id={titleId} className="text-lg font-bold leading-snug text-foreground sm:text-xl">
             {activeItem.name}
           </h2>
-          <p className="mt-1 text-xl font-bold tabular-nums text-foreground sm:text-2xl">
-            {formatPriceLine(activeItem.price)}
-          </p>
+          <div className="mt-1 flex items-center gap-2">
+            <p className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">
+              {formatPriceLine(activeItem.price)}
+            </p>
+            {hasDiscount ? (
+              <p className="text-sm text-muted-foreground line-through">
+                {formatPriceLine(activeItem.original_price!)}
+              </p>
+            ) : null}
+          </div>
+          {hasDiscount ? (
+            <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-emerald-700">
+              {activeItem.discount_percent}% off
+            </p>
+          ) : null}
           {activeItem.description ? (
             <p className="mt-3 max-h-40 overflow-y-auto text-sm leading-relaxed text-muted-foreground [scrollbar-width:thin] sm:text-[15px]">
               {activeItem.description}

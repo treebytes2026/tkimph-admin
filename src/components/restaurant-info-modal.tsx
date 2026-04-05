@@ -94,15 +94,12 @@ export type RestaurantInfoModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   restaurant: PublicRestaurant;
-  /** Shown in “Minimum order” copy (matches header strip when possible). */
-  minimumOrderPeso?: number;
 };
 
 export function RestaurantInfoModal({
   open,
   onOpenChange,
   restaurant,
-  minimumOrderPeso = 99,
 }: RestaurantInfoModalProps) {
   const titleId = useId();
   const [hoursExpanded, setHoursExpanded] = useState(false);
@@ -334,14 +331,15 @@ export function RestaurantInfoModal({
             <div>
               <h3 className="text-sm font-bold text-foreground">Delivery fee</h3>
               <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                Delivery fee is charged based on time of day, distance, and surge conditions. Typical fee from this
-                store is around {formatPeso(fee)}.
+                {fee === 0
+                  ? "Delivery is currently free for orders from this store."
+                  : `The current standard delivery fee for this store is ${formatPeso(fee)}.`}
               </p>
             </div>
             <div>
               <h3 className="text-sm font-bold text-foreground">Minimum order</h3>
               <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                For orders below {formatPeso(minimumOrderPeso)}, we may charge a small order fee.
+                No extra minimum-order fee is being added at checkout right now.
               </p>
             </div>
           </section>

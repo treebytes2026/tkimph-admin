@@ -56,7 +56,6 @@ function RestaurantListingCardInner({
   const dMin = restaurant.delivery_min_minutes ?? 20;
   const dMax = restaurant.delivery_max_minutes ?? 40;
   const fee = restaurant.delivery_fee_php ?? 49;
-  const freeMin = restaurant.free_delivery_min_spend_php ?? 299;
   const level = restaurant.price_level ?? 2;
   const cuisine = restaurant.cuisine?.name ?? "Restaurant";
   const promo = restaurant.promo_label;
@@ -115,9 +114,8 @@ function RestaurantListingCardInner({
         ) : null}
         <p className="mt-2 flex flex-wrap items-baseline gap-x-1 gap-y-0.5 text-xs leading-snug">
           <Bike className="size-3.5 shrink-0 text-violet-600 dark:text-violet-400" aria-hidden />
-          <span className="font-medium text-foreground">{formatPesoInt(fee)}</span>
-          <span className="text-emerald-600 dark:text-emerald-400">
-            or Free with {formatPesoInt(freeMin)} spend
+          <span className="font-medium text-foreground">
+            {fee === 0 ? "Free delivery" : `Delivery ${formatPesoInt(fee)}`}
           </span>
         </p>
         {promo ? (

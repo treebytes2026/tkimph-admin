@@ -26,6 +26,8 @@ export default function RiderRegisterPage() {
   const [address, setAddress] = useState("");
   const [vehicleType, setVehicleType] = useState("");
   const [licenseNumber, setLicenseNumber] = useState("");
+  const [idDocumentFile, setIdDocumentFile] = useState<File | null>(null);
+  const [licenseDocumentFile, setLicenseDocumentFile] = useState<File | null>(null);
   const [notes, setNotes] = useState("");
 
   async function onSubmit(e: React.FormEvent) {
@@ -40,6 +42,8 @@ export default function RiderRegisterPage() {
         address: address.trim() || null,
         vehicle_type: vehicleType.trim() || null,
         license_number: licenseNumber.trim() || null,
+        id_document: idDocumentFile,
+        license_document: licenseDocumentFile,
         notes: notes.trim() || null,
       });
       setDoneMessage(res.message);
@@ -154,6 +158,24 @@ export default function RiderRegisterPage() {
                     id="license_number"
                     value={licenseNumber}
                     onChange={(e) => setLicenseNumber(e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="id_document">Government ID (image or PDF)</Label>
+                  <Input
+                    id="id_document"
+                    type="file"
+                    accept=".jpg,.jpeg,.png,.webp,.pdf"
+                    onChange={(e) => setIdDocumentFile(e.target.files?.[0] ?? null)}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="license_document">Driver license (image or PDF)</Label>
+                  <Input
+                    id="license_document"
+                    type="file"
+                    accept=".jpg,.jpeg,.png,.webp,.pdf"
+                    onChange={(e) => setLicenseDocumentFile(e.target.files?.[0] ?? null)}
                   />
                 </div>
                 <div className="grid gap-2">

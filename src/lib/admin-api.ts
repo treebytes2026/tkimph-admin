@@ -1,6 +1,28 @@
 import { ADMIN_LOGIN_PATH } from "@/lib/routes";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
 
+export function adminApiOrigin(): string {
+  const raw = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api").trim();
+  const noTrailing = raw.replace(/\/+$/, "");
+  if (noTrailing.endsWith("/api")) {
+    return noTrailing.slice(0, -4) || "http://127.0.0.1:8000";
+  }
+  return noTrailing || "http://127.0.0.1:8000";
+}
+
+export function adminStoragePublicUrl(storagePath: string): string {
+  let clean = storagePath.replace(/^\/+/, "");
+  if (clean.startsWith("storage/")) clean = clean.slice("storage/".length);
+  return `${adminApiOrigin()}/storage/${clean}`;
+}
+
+export function adminPublicFileUrl(path: string | null | undefined, fallbackAbsoluteUrl?: string | null): string | null {
+  const p = path?.trim();
+  if (p) return adminStoragePublicUrl(p);
+  const u = fallbackAbsoluteUrl?.trim();
+  return u || null;
+}
+
 export class AdminApiError extends Error {
   status: number;
   body: unknown;
@@ -235,10 +257,10 @@ export interface AdminSettlementSummary {
   restaurant_name: string;
   order_count: number;
   gross_sales: number;
-  service_fees: number;
+  commission_rate: number;
+  platform_commission: number;
   delivery_fees: number;
   restaurant_net: number;
-  pending_settlement_amount: number;
 }
 
 export function fetchRestaurantSettlementSummary(
@@ -270,12 +292,25 @@ export function fetchRegistrationStats(): Promise<RegistrationStats> {
 }
 
 export interface AdminNotificationPayload {
+  category?: string;
+  message?: string;
   type?: string;
   id?: number;
+  order_id?: number;
+  order_number?: string;
   business_name?: string;
   owner_name?: string;
   email?: string;
   name?: string;
+  customer_id?: number;
+  customer_name?: string;
+  customer_email?: string;
+  customer_phone?: string | null;
+  subject?: string;
+  message_body?: string;
+  status?: string;
+  reason?: string | null;
+  [key: string]: unknown;
 }
 
 export interface AdminNotificationRow {
@@ -381,6 +416,7 @@ export interface AdminOrderSummary {
   stalled_orders: number;
   active_riders: number;
   gross_sales: number;
+  platform_income: number;
   restaurant_net: number;
   sla_stalled_minutes: number;
 }
@@ -416,6 +452,73 @@ export interface AdminOperationalSettings {
   partner_self_pause_enabled: boolean;
   partner_cancel_window_minutes: number;
   customer_cancel_window_minutes: number;
+  platform_commission_rate: number;
+  settlements_enabled: boolean;
+  delivery_fee_enabled: boolean;
+  standard_delivery_fee: number;
+  commission_payment_gcash_name: string;
+  commission_payment_gcash_number: string;
+}
+
+export interface AdminSettlementRow {
+  id: number;
+  restaurant_id: number;
+  restaurant: { id: number; name: string } | null;
+  period_from: string | null;
+  period_to: string | null;
+  due_date: string | null;
+  is_overdue: boolean;
+  overdue_days: number;
+  order_count: number;
+  gross_sales: number;
+  service_fees: number;
+  delivery_fees: number;
+  restaurant_net: number;
+  platform_revenue: number;
+  status: "pending" | "settled";
+  reference_number: string | null;
+  partner_reference_number: string | null;
+  partner_payment_note: string | null;
+  payment_proof_path: string | null;
+  payment_proof_url: string | null;
+  payment_submitted_at: string | null;
+  payment_submitted_by_partner: { id: number; name: string; email: string } | null;
+  notes: string | null;
+  settled_at: string | null;
+  last_overdue_notified_at: string | null;
+  created_at: string | null;
+  created_by_admin: { id: number; name: string; email: string } | null;
+  settled_by_admin: { id: number; name: string; email: string } | null;
+}
+
+export interface AdminCommissionCollectionRow {
+  id: number;
+  restaurant_id: number;
+  restaurant: { id: number; name: string } | null;
+  period_from: string | null;
+  period_to: string | null;
+  due_date: string | null;
+  is_overdue: boolean;
+  overdue_days: number;
+  order_count: number;
+  gross_sales: number;
+  commission_amount: number;
+  restaurant_net: number;
+  status: "pending" | "received";
+  collection_reference: string | null;
+  partner_payment_method: "gcash" | null;
+  partner_reference_number: string | null;
+  partner_payment_note: string | null;
+  payment_proof_path: string | null;
+  payment_proof_url: string | null;
+  payment_submitted_at: string | null;
+  payment_submitted_by_partner: { id: number; name: string; email: string } | null;
+  notes: string | null;
+  received_at: string | null;
+  last_overdue_notified_at: string | null;
+  created_at: string | null;
+  created_by_admin: { id: number; name: string; email: string } | null;
+  received_by_admin: { id: number; name: string; email: string } | null;
 }
 
 export function fetchAdminOrders(params?: {
@@ -528,6 +631,120 @@ export function updateAdminSettings(
   });
 }
 
+export function fetchAdminSettlements(params?: {
+  page?: number;
+  per_page?: number;
+  restaurant_id?: number;
+  status?: "pending" | "settled";
+  date_from?: string;
+  date_to?: string;
+}): Promise<Paginated<AdminSettlementRow>> {
+  const q = new URLSearchParams();
+  if (params?.page) q.set("page", String(params.page));
+  if (params?.per_page) q.set("per_page", String(params.per_page));
+  if (params?.restaurant_id) q.set("restaurant_id", String(params.restaurant_id));
+  if (params?.status) q.set("status", params.status);
+  if (params?.date_from) q.set("date_from", params.date_from);
+  if (params?.date_to) q.set("date_to", params.date_to);
+  const qs = q.toString();
+  return adminFetch<Paginated<AdminSettlementRow>>(`/settlements${qs ? `?${qs}` : ""}`);
+}
+
+export function generateAdminSettlement(payload: {
+  restaurant_id: number;
+  period_from: string;
+  period_to: string;
+  notes?: string | null;
+}): Promise<{ message: string; settlement: AdminSettlementRow }> {
+  return adminFetch<{ message: string; settlement: AdminSettlementRow }>("/settlements", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function markAdminSettlementStatus(
+  id: number,
+  payload: {
+    status?: "pending" | "settled";
+    reference_number?: string | null;
+    notes?: string | null;
+  }
+): Promise<{ message: string; settlement: AdminSettlementRow }> {
+  return adminFetch<{ message: string; settlement: AdminSettlementRow }>(`/settlements/${id}/mark-settled`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function runAdminSettlementOverdueAction(
+  id: number,
+  payload: {
+    action: "notify" | "pause" | "suspend";
+    note?: string | null;
+  }
+): Promise<{ message: string; settlement: AdminSettlementRow }> {
+  return adminFetch<{ message: string; settlement: AdminSettlementRow }>(`/settlements/${id}/overdue-action`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function fetchAdminCommissionCollections(params?: {
+  page?: number;
+  per_page?: number;
+  restaurant_id?: number;
+  status?: "pending" | "received";
+  date_from?: string;
+  date_to?: string;
+}): Promise<Paginated<AdminCommissionCollectionRow>> {
+  const q = new URLSearchParams();
+  if (params?.page) q.set("page", String(params.page));
+  if (params?.per_page) q.set("per_page", String(params.per_page));
+  if (params?.restaurant_id) q.set("restaurant_id", String(params.restaurant_id));
+  if (params?.status) q.set("status", params.status);
+  if (params?.date_from) q.set("date_from", params.date_from);
+  if (params?.date_to) q.set("date_to", params.date_to);
+  const qs = q.toString();
+  return adminFetch<Paginated<AdminCommissionCollectionRow>>(`/commission-collections${qs ? `?${qs}` : ""}`);
+}
+
+export function createAdminCommissionCollection(payload: {
+  restaurant_id: number;
+  period_from: string;
+  period_to: string;
+  notes?: string | null;
+}): Promise<{ message: string; collection: AdminCommissionCollectionRow }> {
+  return adminFetch<{ message: string; collection: AdminCommissionCollectionRow }>("/commission-collections", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function createAdminCommissionCollectionsForAll(payload: {
+  period_from: string;
+  period_to: string;
+  notes?: string | null;
+}): Promise<{ message: string; collections: AdminCommissionCollectionRow[] }> {
+  return adminFetch<{ message: string; collections: AdminCommissionCollectionRow[] }>("/commission-collections/generate-all", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function markAdminCommissionCollection(
+  id: number,
+  payload: {
+    status?: "pending" | "received";
+    collection_reference?: string | null;
+    notes?: string | null;
+  }
+): Promise<{ message: string; collection: AdminCommissionCollectionRow }> {
+  return adminFetch<{ message: string; collection: AdminCommissionCollectionRow }>(`/commission-collections/${id}/mark-received`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export interface PartnerApplicationRow {
   id: number;
   owner_first_name: string;
@@ -599,6 +816,10 @@ export interface RiderApplicationRow {
   address: string | null;
   vehicle_type: string | null;
   license_number: string | null;
+  id_document_url: string | null;
+  license_document_url: string | null;
+  id_document_signed_url: string | null;
+  license_document_signed_url: string | null;
   notes: string | null;
   status: string;
   admin_notes: string | null;
