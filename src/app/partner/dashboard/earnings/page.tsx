@@ -1,10 +1,12 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   fetchPartnerCommissionCollections,
   fetchPartnerEarnings,
+  partnerPublicFileUrl,
   submitPartnerCommissionPaymentProof,
   type PartnerCommissionCollectionRow,
 } from "@/lib/partner-api";
@@ -13,7 +15,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Loader2, Receipt, Upload, Wallet } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { CheckCircle2, ExternalLink, Loader2, Receipt, Upload, Wallet } from "lucide-react";
 
 function formatMoney(value: number): string {
   return `PHP ${value.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -32,6 +35,7 @@ export default function PartnerEarningsPage() {
   const [referenceDraft, setReferenceDraft] = useState<Record<number, string>>({});
   const [noteDraft, setNoteDraft] = useState<Record<number, string>>({});
   const [proofFiles, setProofFiles] = useState<Record<number, File | null>>({});
+  const [previewRow, setPreviewRow] = useState<PartnerCommissionCollectionRow | null>(null);
 
   async function loadData() {
     setLoading(true);
@@ -58,6 +62,10 @@ export default function PartnerEarningsPage() {
     () => collections.filter((row) => row.status === "pending").reduce((sum, row) => sum + row.commission_amount, 0),
     [collections]
   );
+  const previewUrl = previewRow
+    ? partnerPublicFileUrl(previewRow.payment_proof_path, previewRow.payment_proof_url)
+    : null;
+  const previewIsPdf = Boolean(previewUrl && previewUrl.toLowerCase().endsWith(".pdf"));
 
   async function handleSubmitProof(row: PartnerCommissionCollectionRow) {
     const file = proofFiles[row.id];
@@ -186,7 +194,20 @@ export default function PartnerEarningsPage() {
                         Proof already sent via <span className="font-semibold">{row.partner_payment_method ?? "manual payment"}</span>.
                         {row.partner_reference_number ? ` Reference: ${row.partner_reference_number}.` : ""}
                         {row.payment_proof_url ? (
-                          <> <a className="font-semibold underline" href={row.payment_proof_url} target="_blank" rel="noreferrer">View uploaded receipt</a></>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <Button type="button" size="sm" className="rounded-xl" onClick={() => setPreviewRow(row)}>
+                              View uploaded receipt
+                            </Button>
+                            <a
+                              className="inline-flex items-center gap-1 text-sm font-semibold underline"
+                              href={partnerPublicFileUrl(row.payment_proof_path, row.payment_proof_url) ?? "#"}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Open in new tab
+                              <ExternalLink className="size-3.5" />
+                            </a>
+                          </div>
                         ) : null}
                       </div>
                     ) : null}
@@ -248,6 +269,54 @@ export default function PartnerEarningsPage() {
           )}
         </CardContent>
       </Card>
+
+      <Sheet open={previewRow != null} onOpenChange={(open) => !open && setPreviewRow(null)}>
+        <SheetContent side="right" className="w-[min(100vw,64rem)] overflow-y-auto p-0 sm:max-w-none">
+          <div className="p-6">
+            <SheetHeader>
+              <SheetTitle>Uploaded receipt</SheetTitle>
+            </SheetHeader>
+            {previewRow ? (
+              <div className="mt-6 space-y-4">
+                <div className="rounded-2xl border border-border/70 bg-muted/20 p-4 text-sm">
+                  <p className="font-semibold text-foreground">
+                    {previewRow.period_from ?? "N/A"} to {previewRow.period_to ?? "N/A"}
+                  </p>
+                  <p className="mt-1 text-muted-foreground">
+                    {previewRow.partner_reference_number ? `Reference: ${previewRow.partner_reference_number}` : "No reference provided"}
+                  </p>
+                </div>
+
+                {previewUrl ? (
+                  previewIsPdf ? (
+                    <iframe
+                      src={previewUrl}
+                      title="Uploaded receipt PDF"
+                      className="h-[75vh] w-full rounded-2xl border border-border/70 bg-white"
+                    />
+                  ) : (
+                    <div className="overflow-hidden rounded-2xl border border-border/70 bg-black/5 p-3">
+                      <div className="relative h-[75vh] w-full">
+                        <Image
+                          src={previewUrl}
+                          alt="Uploaded receipt"
+                          fill
+                          unoptimized
+                          className="rounded-xl object-contain"
+                        />
+                      </div>
+                    </div>
+                  )
+                ) : (
+                  <div className="rounded-2xl border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive">
+                    Receipt preview is not available for this file.
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
