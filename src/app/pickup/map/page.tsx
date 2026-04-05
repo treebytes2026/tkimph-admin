@@ -17,13 +17,7 @@ import {
 } from "@/lib/public-api";
 import { cn } from "@/lib/utils";
 
-declare global {
-  interface Window {
-    L?: LeafletRuntime;
-  }
-}
-
-type LeafletMap = {
+type PickupLeafletMap = {
   fitBounds: (bounds: unknown, options?: { padding?: [number, number] }) => void;
   setView: (center: [number, number], zoom: number) => void;
   flyTo: (center: [number, number], zoom: number, options?: { duration?: number }) => void;
@@ -31,24 +25,24 @@ type LeafletMap = {
   remove: () => void;
 };
 
-type LeafletMarker = {
-  bindPopup: (html: string) => LeafletMarker;
+type PickupLeafletMarker = {
+  bindPopup: (html: string) => PickupLeafletMarker;
   on: (event: string, callback: () => void) => void;
   remove: () => void;
-  addTo: (map: LeafletMap) => LeafletMarker;
+  addTo: (map: PickupLeafletMap) => PickupLeafletMarker;
   openPopup: () => void;
 };
 
-type LeafletRuntime = {
+type PickupLeafletRuntime = {
   map: (
     element: HTMLElement,
     options: { center: [number, number]; zoom: number; zoomControl: boolean; preferCanvas?: boolean }
-  ) => LeafletMap;
+  ) => PickupLeafletMap;
   tileLayer: (
     url: string,
     options: { maxZoom: number; attribution: string; subdomains?: string; detectRetina?: boolean }
-  ) => { addTo: (map: LeafletMap) => void };
-  marker: (coords: [number, number], options?: { icon?: unknown }) => LeafletMarker;
+  ) => { addTo: (map: PickupLeafletMap) => void };
+  marker: (coords: [number, number], options?: { icon?: unknown }) => PickupLeafletMarker;
   latLngBounds: (coords: Array<[number, number]>) => unknown;
   divIcon: (options: { className?: string; html?: string; iconSize?: [number, number]; iconAnchor?: [number, number] }) => unknown;
 };
@@ -85,9 +79,14 @@ async function geocodeAddress(address: string): Promise<{ lat: number; lon: numb
   return { lat: Number(data[0].lat), lon: Number(data[0].lon) };
 }
 
+function getLeafletRuntime(): PickupLeafletRuntime | undefined {
+  if (typeof window === "undefined") return undefined;
+  return (window as Window & { L?: PickupLeafletRuntime }).L;
+}
+
 function loadLeaflet(): Promise<void> {
   if (typeof window === "undefined") return Promise.resolve();
-  if (window.L) return Promise.resolve();
+  if (getLeafletRuntime()) return Promise.resolve();
 
   return new Promise((resolve, reject) => {
     const existingCss = document.querySelector('link[data-leaflet="1"]');
@@ -101,7 +100,7 @@ function loadLeaflet(): Promise<void> {
 
     const existingScript = document.querySelector('script[data-leaflet="1"]') as HTMLScriptElement | null;
     if (existingScript) {
-      if (window.L) resolve();
+      if (getLeafletRuntime()) resolve();
       else existingScript.addEventListener("load", () => resolve(), { once: true });
       return;
     }
@@ -116,7 +115,7 @@ function loadLeaflet(): Promise<void> {
   });
 }
 
-function restaurantPinIcon(L: LeafletRuntime): unknown {
+function restaurantPinIcon(L: PickupLeafletRuntime): unknown {
   return L.divIcon({
     className: "tk-restaurant-pin-icon",
     html:
@@ -162,8 +161,8 @@ function PickupMapPageInner() {
   const [showSelectedOnly, setShowSelectedOnly] = useState(false);
 
   const mapRef = useRef<HTMLDivElement | null>(null);
-  const mapInstanceRef = useRef<LeafletMap | null>(null);
-  const markerRefs = useRef<Record<number, LeafletMarker>>({});
+  const mapInstanceRef = useRef<PickupLeafletMap | null>(null);
+  const markerRefs = useRef<Record<number, PickupLeafletMarker>>({});
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -291,9 +290,9 @@ function PickupMapPageInner() {
       if (!mapRef.current) return;
       try {
         await loadLeaflet();
-        if (cancelled || !mapRef.current || !window.L) return;
+        const L = getLeafletRuntime();
+        if (cancelled || !mapRef.current || !L) return;
 
-        const L = window.L;
         const defaultCenter: [number, number] =
           !Number.isNaN(initialLat) && !Number.isNaN(initialLng)
             ? [initialLat, initialLng]
@@ -317,6 +316,7 @@ function PickupMapPageInner() {
         }
 
         const map = mapInstanceRef.current;
+        if (!map) return;
         const restaurantIcon = restaurantPinIcon(L);
         map.invalidateSize({ pan: false });
         window.setTimeout(() => {
