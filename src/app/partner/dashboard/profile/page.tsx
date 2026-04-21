@@ -12,7 +12,7 @@ import {
   changePartnerPassword,
   deletePartnerLocationImage,
   deletePartnerRestaurantProfileImage,
-  fetchPartnerOverview,
+  fetchPartnerOverviewCached,
   PartnerApiError,
   partnerPublicFileUrl,
   updatePartnerProfile,
@@ -189,7 +189,7 @@ export default function PartnerProfilePage() {
     let cancelled = false;
     (async () => {
       try {
-        const o = await fetchPartnerOverview();
+        const o = await fetchPartnerOverviewCached();
         if (cancelled) return;
         setUser(o.user);
         const r = o.restaurants[0] ?? null;

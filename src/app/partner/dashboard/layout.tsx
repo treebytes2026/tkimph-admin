@@ -6,7 +6,7 @@ import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
 import { getStoredUser, logout } from "@/lib/auth";
 import {
-  fetchPartnerOverview,
+  fetchPartnerOverviewCached,
   fetchPartnerNotifications,
   fetchPartnerUnreadNotificationsCount,
   markAllPartnerNotificationsRead,
@@ -204,7 +204,7 @@ export default function PartnerDashboardLayout({ children }: { children: React.R
   }, [router]);
 
   const refreshHeaderProfilePhoto = useCallback(() => {
-    fetchPartnerOverview()
+    fetchPartnerOverviewCached()
       .then((o) => {
         const r = o.restaurants[0];
         setHeaderProfilePhotoSrc(

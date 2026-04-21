@@ -6,7 +6,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import {
-  fetchPartnerOverview,
+  fetchPartnerOverviewCached,
   PartnerApiError,
   updatePartnerRestaurant,
   type PartnerOpeningHoursDay,
@@ -39,7 +39,7 @@ export default function PartnerHoursPage() {
     let cancelled = false;
     (async () => {
       try {
-        const o = await fetchPartnerOverview();
+        const o = await fetchPartnerOverviewCached();
         if (cancelled) return;
         const r = o.restaurants[0];
         if (r) {
