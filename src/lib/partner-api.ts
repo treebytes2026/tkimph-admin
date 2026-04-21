@@ -117,8 +117,100 @@ export interface PartnerOverviewResponse {
   };
 }
 
+const PARTNER_OVERVIEW_CACHE_KEY = "tkimph:partner-overview-cache:v1";
+const PARTNER_OVERVIEW_TTL_MS = 60_000;
+
+let partnerOverviewCache:
+  | {
+      value: PartnerOverviewResponse;
+      expiresAt: number;
+    }
+  | null = null;
+let partnerOverviewInFlight: Promise<PartnerOverviewResponse> | null = null;
+
+function readPartnerOverviewCache(): PartnerOverviewResponse | null {
+  const now = Date.now();
+  if (partnerOverviewCache && partnerOverviewCache.expiresAt > now) {
+    return partnerOverviewCache.value;
+  }
+
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = sessionStorage.getItem(PARTNER_OVERVIEW_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as {
+      value?: PartnerOverviewResponse;
+      expiresAt?: number;
+    };
+    if (!parsed.value || !parsed.expiresAt || parsed.expiresAt <= now) {
+      sessionStorage.removeItem(PARTNER_OVERVIEW_CACHE_KEY);
+      return null;
+    }
+    partnerOverviewCache = {
+      value: parsed.value,
+      expiresAt: parsed.expiresAt,
+    };
+    return parsed.value;
+  } catch {
+    return null;
+  }
+}
+
+function writePartnerOverviewCache(value: PartnerOverviewResponse) {
+  const expiresAt = Date.now() + PARTNER_OVERVIEW_TTL_MS;
+  partnerOverviewCache = { value, expiresAt };
+
+  if (typeof window === "undefined") return;
+
+  try {
+    sessionStorage.setItem(
+      PARTNER_OVERVIEW_CACHE_KEY,
+      JSON.stringify({ value, expiresAt })
+    );
+  } catch {
+    // Ignore storage failures and keep the in-memory cache.
+  }
+}
+
+export function invalidatePartnerOverviewCache() {
+  partnerOverviewCache = null;
+  partnerOverviewInFlight = null;
+  if (typeof window !== "undefined") {
+    sessionStorage.removeItem(PARTNER_OVERVIEW_CACHE_KEY);
+  }
+}
+
 export async function fetchPartnerOverview(): Promise<PartnerOverviewResponse> {
-  return partnerRequest<PartnerOverviewResponse>("/partner/overview");
+  const response = await partnerRequest<PartnerOverviewResponse>("/partner/overview");
+  writePartnerOverviewCache(response);
+  return response;
+}
+
+export async function fetchPartnerOverviewCached(
+  options?: { force?: boolean }
+): Promise<PartnerOverviewResponse> {
+  if (!options?.force) {
+    const cached = readPartnerOverviewCache();
+    if (cached) return cached;
+    if (partnerOverviewInFlight) return partnerOverviewInFlight;
+  }
+
+  const request = fetchPartnerOverview()
+    .catch((error) => {
+      if (options?.force) {
+        invalidatePartnerOverviewCache();
+      }
+      throw error;
+    })
+    .finally(() => {
+      if (partnerOverviewInFlight === request) {
+        partnerOverviewInFlight = null;
+      }
+    });
+
+  partnerOverviewInFlight = request;
+  return request;
 }
 
 export interface PartnerPromotion {
@@ -544,10 +636,12 @@ export async function updatePartnerRestaurant(
     opening_hours?: PartnerOpeningHoursDay[] | null;
   }
 ): Promise<PartnerOverviewRestaurant> {
-  return partnerRequest<PartnerOverviewRestaurant>(`/partner/restaurants/${restaurantId}`, {
+  const restaurant = await partnerRequest<PartnerOverviewRestaurant>(`/partner/restaurants/${restaurantId}`, {
     method: "PATCH",
     body: JSON.stringify(body),
   });
+  invalidatePartnerOverviewCache();
+  return restaurant;
 }
 
 export async function updatePartnerRestaurantAvailability(
@@ -558,10 +652,12 @@ export async function updatePartnerRestaurantAvailability(
     paused_until?: string | null;
   }
 ): Promise<PartnerOverviewRestaurant> {
-  return partnerRequest<PartnerOverviewRestaurant>(`/partner/restaurants/${restaurantId}/availability`, {
+  const restaurant = await partnerRequest<PartnerOverviewRestaurant>(`/partner/restaurants/${restaurantId}/availability`, {
     method: "PATCH",
     body: JSON.stringify(body),
   });
+  invalidatePartnerOverviewCache();
+  return restaurant;
 }
 
 export async function changePartnerPassword(body: {
@@ -639,15 +735,19 @@ export async function uploadPartnerRestaurantProfileImage(
     }
     throw new PartnerApiError(msg, res.status);
   }
-  return res.json() as Promise<PartnerOverviewRestaurant>;
+  const restaurant = (await res.json()) as PartnerOverviewRestaurant;
+  invalidatePartnerOverviewCache();
+  return restaurant;
 }
 
 export async function deletePartnerRestaurantProfileImage(
   restaurantId: number
 ): Promise<PartnerOverviewRestaurant> {
-  return partnerRequest<PartnerOverviewRestaurant>(`/partner/restaurants/${restaurantId}/profile-image`, {
+  const restaurant = await partnerRequest<PartnerOverviewRestaurant>(`/partner/restaurants/${restaurantId}/profile-image`, {
     method: "DELETE",
   });
+  invalidatePartnerOverviewCache();
+  return restaurant;
 }
 
 async function partnerRequest<T>(path: string, options: RequestInit = {}): Promise<T> {

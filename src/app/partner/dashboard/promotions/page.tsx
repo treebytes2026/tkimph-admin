@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import {
   createPartnerPromotion,
   deletePartnerPromotion,
-  fetchPartnerOverview,
+  fetchPartnerOverviewCached,
   fetchPartnerPromotions,
   updatePartnerPromotion,
   type PartnerPromotion,
@@ -47,7 +47,7 @@ export default function PartnerPromotionsPage() {
     let cancelled = false;
     (async () => {
       try {
-        const overview = await fetchPartnerOverview();
+        const overview = await fetchPartnerOverviewCached();
         if (cancelled) return;
         const rid = overview.restaurants[0]?.id ?? null;
         setRestaurantId(rid);

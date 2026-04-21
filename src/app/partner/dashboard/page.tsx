@@ -8,11 +8,12 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   fetchPartnerEarnings,
-  fetchPartnerOverview,
+  fetchPartnerOverviewCached,
   fetchPartnerOrders,
   PartnerApiError,
   updatePartnerRestaurantAvailability,
   type PartnerOrder,
+  type PartnerOverviewResponse,
   type PartnerOverviewRestaurant,
 } from "@/lib/partner-api";
 import {
@@ -92,7 +93,7 @@ function RestaurantCard({ r }: { r: PartnerOverviewRestaurant }) {
 }
 
 export default function PartnerDashboardHomePage() {
-  const [data, setData] = useState<Awaited<ReturnType<typeof fetchPartnerOverview>> | null>(null);
+  const [data, setData] = useState<PartnerOverviewResponse | null>(null);
   const [earnings, setEarnings] = useState<Awaited<ReturnType<typeof fetchPartnerEarnings>> | null>(null);
   const [orderSnapshot, setOrderSnapshot] = useState<PartnerOrderSnapshot>({ total: 0, pending: 0, preparing: 0, outForDelivery: 0, completed: 0 });
   const [error, setError] = useState<string | null>(null);
@@ -101,7 +102,7 @@ export default function PartnerDashboardHomePage() {
 
   async function refreshDashboard() {
     const [overviewRes, ordersRes, earningsRes] = await Promise.allSettled([
-      fetchPartnerOverview(),
+      fetchPartnerOverviewCached(),
       fetchPartnerOrders({ per_page: 40 }),
       fetchPartnerEarnings(),
     ]);

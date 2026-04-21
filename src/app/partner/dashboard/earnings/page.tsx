@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   fetchPartnerCommissionCollections,
@@ -26,6 +26,36 @@ function formatRate(value: number): string {
   return `${(value * 100).toFixed(0)}%`;
 }
 
+function toDateInputValue(value: Date): string {
+  const year = value.getFullYear();
+  const month = `${value.getMonth() + 1}`.padStart(2, "0");
+  const day = `${value.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getCurrentWeekRange(today = new Date()): { start: string; end: string } {
+  return getWeekRange(today, 0);
+}
+
+function getWeekRange(today = new Date(), offsetWeeks = 0): { start: string; end: string } {
+  const start = new Date(today);
+  start.setHours(0, 0, 0, 0);
+  const day = start.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  start.setDate(start.getDate() + diffToMonday + offsetWeeks * 7);
+
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+
+  return {
+    start: toDateInputValue(start),
+    end: toDateInputValue(end),
+  };
+}
+
+type SummaryRangeKey = "this_week" | "last_week" | "all_time";
+
 export default function PartnerEarningsPage() {
   const [data, setData] = useState<Awaited<ReturnType<typeof fetchPartnerEarnings>> | null>(null);
   const [collections, setCollections] = useState<PartnerCommissionCollectionRow[]>([]);
@@ -36,12 +66,27 @@ export default function PartnerEarningsPage() {
   const [noteDraft, setNoteDraft] = useState<Record<number, string>>({});
   const [proofFiles, setProofFiles] = useState<Record<number, File | null>>({});
   const [previewRow, setPreviewRow] = useState<PartnerCommissionCollectionRow | null>(null);
+  const [summaryRange, setSummaryRange] = useState<SummaryRangeKey>("this_week");
+  const thisWeekRange = useMemo(() => getCurrentWeekRange(), []);
+  const lastWeekRange = useMemo(() => getWeekRange(new Date(), -1), []);
+  const activeRange = useMemo(() => {
+    if (summaryRange === "last_week") return lastWeekRange;
+    if (summaryRange === "all_time") return null;
+    return thisWeekRange;
+  }, [lastWeekRange, summaryRange, thisWeekRange]);
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [earnings, commissionRows] = await Promise.all([
-        fetchPartnerEarnings(),
+        fetchPartnerEarnings(
+          activeRange
+            ? {
+                date_from: activeRange.start,
+                date_to: activeRange.end,
+              }
+            : undefined
+        ),
         fetchPartnerCommissionCollections({ per_page: 50 }),
       ]);
       setData(earnings);
@@ -52,20 +97,33 @@ export default function PartnerEarningsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [activeRange]);
 
   useEffect(() => {
     void loadData();
-  }, []);
+  }, [loadData]);
 
   const pendingTotal = useMemo(
     () => collections.filter((row) => row.status === "pending").reduce((sum, row) => sum + row.commission_amount, 0),
     [collections]
   );
+  const receivedWeeks = useMemo(() => collections.filter((row) => row.status === "received").length, [collections]);
+  const pendingWeeks = useMemo(() => collections.filter((row) => row.status === "pending").length, [collections]);
   const previewUrl = previewRow
     ? partnerPublicFileUrl(previewRow.payment_proof_path, previewRow.payment_proof_url)
     : null;
   const previewIsPdf = Boolean(previewUrl && previewUrl.toLowerCase().endsWith(".pdf"));
+  const summaryDescription = activeRange ? `${activeRange.start} to ${activeRange.end}` : "All completed orders";
+  const ordersLabel =
+    summaryRange === "last_week" ? "Last week orders" : summaryRange === "all_time" ? "All-time orders" : "This week orders";
+  const grossSalesLabel =
+    summaryRange === "last_week" ? "Last week gross sales" : summaryRange === "all_time" ? "All-time gross sales" : "This week gross sales";
+  const commissionLabel =
+    summaryRange === "last_week"
+      ? "Last week platform commission"
+      : summaryRange === "all_time"
+        ? "All-time platform commission"
+        : "This week platform commission";
 
   async function handleSubmitProof(row: PartnerCommissionCollectionRow) {
     const file = proofFiles[row.id];
@@ -109,15 +167,51 @@ export default function PartnerEarningsPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-foreground">Earnings and commission payments</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          TKimph keeps an automatic {formatRate(data.commission_rate)} commission from dish sales. Use the section below to pay pending platform commission manually and send your proof of receipt to admin.
+          TKimph keeps an automatic {formatRate(data.commission_rate)} commission from dish sales. Use the range buttons below to switch the summary cards, while the records section keeps your paid and unpaid commission history by week.
         </p>
       </div>
 
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" variant={summaryRange === "this_week" ? "default" : "outline"} className="rounded-xl" onClick={() => setSummaryRange("this_week")}>
+          This week
+        </Button>
+        <Button type="button" variant={summaryRange === "last_week" ? "default" : "outline"} className="rounded-xl" onClick={() => setSummaryRange("last_week")}>
+          Last week
+        </Button>
+        <Button type="button" variant={summaryRange === "all_time" ? "default" : "outline"} className="rounded-xl" onClick={() => setSummaryRange("all_time")}>
+          All time
+        </Button>
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Orders</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{data.order_count}</CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Gross sales</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{formatMoney(data.gross_sales)}</CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Platform commission</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{formatMoney(data.platform_commission)}</CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Pending commission to pay</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{formatMoney(pendingTotal)}</CardContent></Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-muted-foreground">{ordersLabel}</CardTitle>
+            <CardDescription>{summaryDescription}</CardDescription>
+          </CardHeader>
+          <CardContent className="text-2xl font-bold">{data.order_count}</CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-muted-foreground">{grossSalesLabel}</CardTitle>
+            <CardDescription>{summaryDescription}</CardDescription>
+          </CardHeader>
+          <CardContent className="text-2xl font-bold">{formatMoney(data.gross_sales)}</CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-muted-foreground">{commissionLabel}</CardTitle>
+            <CardDescription>{summaryDescription}</CardDescription>
+          </CardHeader>
+          <CardContent className="text-2xl font-bold">{formatMoney(data.platform_commission)}</CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-muted-foreground">Pending commission to pay</CardTitle>
+            <CardDescription>{pendingWeeks} unpaid week{pendingWeeks === 1 ? "" : "s"}</CardDescription>
+          </CardHeader>
+          <CardContent className="text-2xl font-bold">{formatMoney(pendingTotal)}</CardContent>
+        </Card>
       </div>
 
       <Card>
@@ -145,12 +239,26 @@ export default function PartnerEarningsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base"><Receipt className="size-4" />Commission records</CardTitle>
+          <CardTitle className="flex items-center gap-2 text-base"><Receipt className="size-4" />Weekly commission history</CardTitle>
           <CardDescription>
-            Each record below is based on completed-order commission from your menu and dish sales for that date range.
+            Each record below is one weekly commission period, so you can quickly see whether that week has already been paid and received by admin.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-border/60 p-3">
+              <p className="text-xs text-muted-foreground">Weeks in history</p>
+              <p className="mt-1 font-semibold">{collections.length}</p>
+            </div>
+            <div className="rounded-xl border border-border/60 p-3">
+              <p className="text-xs text-muted-foreground">Weeks paid</p>
+              <p className="mt-1 font-semibold">{receivedWeeks}</p>
+            </div>
+            <div className="rounded-xl border border-border/60 p-3">
+              <p className="text-xs text-muted-foreground">Weeks still unpaid</p>
+              <p className="mt-1 font-semibold">{pendingWeeks}</p>
+            </div>
+          </div>
           {collections.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border/80 bg-muted/20 px-4 py-10 text-center text-sm text-muted-foreground">
               No commission records have been generated for your restaurant yet.

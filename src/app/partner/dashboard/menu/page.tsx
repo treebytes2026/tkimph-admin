@@ -11,7 +11,7 @@ import {
   deletePartnerMenuItemImage,
   fetchPartnerMenu,
   fetchPartnerMenuCategories,
-  fetchPartnerOverview,
+  fetchPartnerOverviewCached,
   fetchRestaurantMenus,
   updatePartnerMenu,
   updatePartnerMenuItem,
@@ -127,7 +127,7 @@ export default function PartnerMenuPage() {
     let cancelled = false;
     (async () => {
       try {
-        const o = await fetchPartnerOverview();
+        const o = await fetchPartnerOverviewCached();
         if (cancelled) return;
         setRestaurant(o.restaurants[0] ?? null);
         setError(null);
@@ -188,9 +188,11 @@ export default function PartnerMenuPage() {
     setExpandedId(menuId);
     setDetailLoading(true);
     try {
-      const d = await fetchPartnerMenu(restaurantId, menuId);
+      const [d, cats] = await Promise.all([
+        fetchPartnerMenu(restaurantId, menuId),
+        fetchPartnerMenuCategories(),
+      ]);
       setDetail(d);
-      const cats = await fetchPartnerMenuCategories();
       setCategories(cats);
       setItemForm((f) => ({
         ...f,
@@ -654,7 +656,7 @@ export default function PartnerMenuPage() {
 
                                     {detail.items.length === 0 ? (
                                       <p className="rounded-md border border-dashed border-border/60 bg-muted/20 px-3 py-6 text-center text-xs text-muted-foreground">
-                                        No dishes yet. Add an item below.
+                                        No dishes yet. Add dishes below.
                                       </p>
                                     ) : (
                                       <div className="max-h-[min(60vh,520px)] overflow-y-auto pr-1">
@@ -949,7 +951,7 @@ export default function PartnerMenuPage() {
 
                                     <Card className="border-dashed border-primary/25 bg-muted/5">
                                       <CardHeader className="pb-2">
-                                        <CardTitle className="text-base">Add an item</CardTitle>
+                                        <CardTitle className="text-base">Add dishes</CardTitle>
                                         <CardDescription>
                                           Pick a category, name, and price. You can add an optional photo after saving.
                                         </CardDescription>
