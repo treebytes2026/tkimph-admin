@@ -5,8 +5,8 @@ import { Providers } from "./providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "TKimph Admin",
-  description: "TKimph Admin Dashboard",
+  title: "Tkimph",
+  description: "Tkimph",
   icons: {
     icon: [
       { url: "/favicon.ico?v=20260405b", type: "image/x-icon" },

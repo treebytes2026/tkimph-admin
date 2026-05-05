@@ -38,6 +38,10 @@ function formatCurrency(value: string | number): string {
   return `PHP ${n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+function partnerCanChangeStatus(status: string): boolean {
+  return !["out_for_delivery", "completed", "cancelled", "failed", "undeliverable"].includes(status);
+}
+
 export default function PartnerOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -281,56 +285,56 @@ export default function PartnerOrdersPage() {
                   ) : null}
                 </div>
 
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant={order.status === "accepted" ? "default" : "outline"}
-                    disabled={updatingId === order.id}
-                    onClick={() => setStatus(order.id, "accepted")}
-                  >
-                    Accept
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={order.status === "preparing" ? "default" : "outline"}
-                    disabled={updatingId === order.id}
-                    onClick={() => setStatus(order.id, "preparing")}
-                  >
-                    Preparing
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={order.status === "out_for_delivery" ? "default" : "outline"}
-                    disabled={updatingId === order.id}
-                    onClick={() => setStatus(order.id, "out_for_delivery")}
-                  >
-                    Out for delivery
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={order.status === "completed" ? "default" : "outline"}
-                    disabled={updatingId === order.id}
-                    onClick={() => setStatus(order.id, "completed")}
-                  >
-                    Complete
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={order.status === "cancelled" ? "default" : "outline"}
-                    disabled={updatingId === order.id}
-                    onClick={() => setStatus(order.id, "cancelled")}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={order.status === "failed" ? "default" : "outline"}
-                    disabled={updatingId === order.id}
-                    onClick={() => setStatus(order.id, "failed")}
-                  >
-                    Failed
-                  </Button>
-                </div>
+                {partnerCanChangeStatus(order.status) ? (
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant={order.status === "accepted" ? "default" : "outline"}
+                      disabled={updatingId === order.id}
+                      onClick={() => setStatus(order.id, "accepted")}
+                    >
+                      Accept
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={order.status === "preparing" ? "default" : "outline"}
+                      disabled={updatingId === order.id}
+                      onClick={() => setStatus(order.id, "preparing")}
+                    >
+                      Preparing
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={order.status === "out_for_delivery" ? "default" : "outline"}
+                      disabled={updatingId === order.id}
+                      onClick={() => setStatus(order.id, "out_for_delivery")}
+                    >
+                      Out for delivery
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={order.status === "cancelled" ? "default" : "outline"}
+                      disabled={updatingId === order.id}
+                      onClick={() => setStatus(order.id, "cancelled")}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={order.status === "failed" ? "default" : "outline"}
+                      disabled={updatingId === order.id}
+                      onClick={() => setStatus(order.id, "failed")}
+                    >
+                      Failed
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+                    {order.status === "out_for_delivery"
+                      ? "This order is now controlled by the rider. The restaurant can view updates, but only the rider can complete or fail the delivery."
+                      : "This order is closed. Status changes are no longer available here."}
+                  </div>
+                )}
 
                 {order.timeline?.length ? (
                   <div className="space-y-2 rounded-xl border border-border/70 bg-card p-3">
