@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AUTH_CHANGED_EVENT, getStoredToken, getStoredUser, type AuthUser } from "@/lib/auth";
+import { addLeafletBaseTileLayer } from "@/lib/google-map-tiles";
 import {
   claimRiderOrder,
   fetchAvailableRiderOrders,
@@ -489,12 +490,7 @@ export default function RiderDashboardPage() {
             zoomControl: true,
             preferCanvas: true,
           });
-          L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-            maxZoom: 19,
-            attribution: "&copy; OpenStreetMap contributors",
-            subdomains: "abc",
-            detectRetina: true,
-          }).addTo(mapInstanceRef.current);
+          await addLeafletBaseTileLayer(L, mapInstanceRef.current);
         } else {
           mapInstanceRef.current.setView(mapCenter, 13);
         }

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AUTH_CHANGED_EVENT, getStoredToken, getStoredUser, type AuthUser } from "@/lib/auth";
 import { CustomerApiError, fetchCustomerOrder, type CustomerOrder } from "@/lib/customer-api";
+import { addLeafletBaseTileLayer } from "@/lib/google-map-tiles";
 import { CheckCircle2, Clock3, Loader2, MapPin, Navigation, Phone, Store, Truck } from "lucide-react";
 
 declare global {
@@ -434,12 +435,7 @@ export default function CustomerOrderTrackPage() {
             zoomControl: true,
             preferCanvas: true,
           });
-          L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-            maxZoom: 19,
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-            subdomains: "abc",
-            detectRetina: true,
-          }).addTo(mapInstanceRef.current);
+          await addLeafletBaseTileLayer(L, mapInstanceRef.current);
         } else {
           mapInstanceRef.current.setView(center, 13);
         }
