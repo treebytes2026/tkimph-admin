@@ -1238,17 +1238,17 @@ export function Footer() {
             </h4>
             <ul className="space-y-2 text-sm text-secondary-foreground/75">
               <li>
-                <Link href="#" className="transition hover:text-secondary-foreground">
+                <Link href="/legal/terms" className="transition hover:text-secondary-foreground">
                   Terms & Conditions
                 </Link>
               </li>
               <li>
-                <Link href="#" className="transition hover:text-secondary-foreground">
+                <Link href="/legal/privacy" className="transition hover:text-secondary-foreground">
                   Privacy Policy
                 </Link>
               </li>
               <li>
-                <Link href="#" className="transition hover:text-secondary-foreground">
+                <Link href="/legal/cookies" className="transition hover:text-secondary-foreground">
                   Cookie Policy
                 </Link>
               </li>
