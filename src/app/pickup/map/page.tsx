@@ -15,6 +15,7 @@ import {
   type PublicMenuGroup,
   type PublicRestaurant,
 } from "@/lib/public-api";
+import { addLeafletBaseTileLayer } from "@/lib/google-map-tiles";
 import { cn } from "@/lib/utils";
 
 type PickupLeafletMap = {
@@ -307,12 +308,7 @@ function PickupMapPageInner() {
             zoomControl: true,
             preferCanvas: true,
           });
-          L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-            maxZoom: 19,
-            attribution: "&copy; OpenStreetMap contributors",
-            subdomains: "abc",
-            detectRetina: true,
-          }).addTo(mapInstanceRef.current);
+          await addLeafletBaseTileLayer(L, mapInstanceRef.current);
         }
 
         const map = mapInstanceRef.current;
