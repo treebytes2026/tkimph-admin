@@ -742,7 +742,7 @@ function NavbarInner() {
         <div className="flex min-w-0 flex-1 items-center gap-4 md:gap-8">
           <Link href="/" className="flex shrink-0 items-center gap-2">
             <Image
-              src="/tkimlogo.png"
+              src="/tkimlogo.png?v=20260530"
               alt="TKimph"
               width={40}
               height={40}
@@ -1170,7 +1170,7 @@ export function Footer() {
           <div className="col-span-2 md:col-span-1">
             <div className="mb-4 flex items-center gap-2">
               <Image
-                src="/tkimlogo.png"
+                src="/tkimlogo.png?v=20260530"
                 alt="TKimph"
                 width={36}
                 height={36}

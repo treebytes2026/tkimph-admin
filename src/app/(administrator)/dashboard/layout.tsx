@@ -71,7 +71,7 @@ function SidebarContent({
       <div className="flex items-center gap-3 px-5 py-6">
         <div className="relative">
           <Image
-            src="/tkimlogo.png"
+            src="/tkimlogo.png?v=20260530"
             alt="TKimph"
             width={44}
             height={44}

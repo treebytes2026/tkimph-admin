@@ -123,7 +123,7 @@ export function AuthModal() {
               <QrCode className="size-36 text-primary sm:size-40" strokeWidth={1} />
               <div className="mt-2 flex justify-center">
                 <Image
-                  src="/tkimlogo.png"
+                  src="/tkimlogo.png?v=20260530"
                   alt="TKimph"
                   width={28}
                   height={28}

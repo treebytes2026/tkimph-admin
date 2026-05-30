@@ -25,6 +25,12 @@ const nextConfig: NextConfig = {
     root: path.resolve(process.cwd()),
   },
   images: {
+    localPatterns: [
+      {
+        pathname: "/tkimlogo.png",
+        search: "?v=20260530",
+      },
+    ],
     remotePatterns: [
       ...(apiImageRemotePattern ? [apiImageRemotePattern] : []),
       {

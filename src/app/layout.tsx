@@ -10,10 +10,10 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: "/favicon.ico?v=20260405b", type: "image/x-icon" },
-      { url: "/tkimlogo.png?v=20260405b", type: "image/png" },
+      { url: "/tkimlogo.png?v=20260530", type: "image/png" },
     ],
     shortcut: [{ url: "/favicon.ico?v=20260405b", type: "image/x-icon" }],
-    apple: [{ url: "/tkimlogo.png?v=20260405b", type: "image/png" }],
+    apple: [{ url: "/tkimlogo.png?v=20260530", type: "image/png" }],
   },
 };
 

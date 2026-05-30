@@ -37,7 +37,7 @@ export default function BusinessAccountComingSoonPage() {
         <div className="flex flex-col items-center gap-4 text-center">
           <div className="relative">
             <Image
-              src="/tkimlogo.png"
+              src="/tkimlogo.png?v=20260530"
               alt=""
               width={48}
               height={48}

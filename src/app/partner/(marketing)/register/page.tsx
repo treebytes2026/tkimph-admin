@@ -143,7 +143,7 @@ export default function PartnerRegisterPage() {
           ) : doneMessage ? (
             <div className="space-y-4 text-center">
               <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-primary/10">
-                <Image src="/tkimlogo.png" alt="" width={40} height={40} className="rounded-lg" />
+                <Image src="/tkimlogo.png?v=20260530" alt="" width={40} height={40} className="rounded-lg" />
               </div>
               <p className="text-sm font-medium text-foreground">{doneMessage}</p>
               <Link

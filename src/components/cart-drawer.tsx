@@ -116,7 +116,7 @@ export function CartDrawer() {
                   <img src={profileSrc} alt="" className="size-full object-cover" />
                 ) : (
                   <div className="flex size-full items-center justify-center text-muted-foreground">
-                    <Image src="/tkimlogo.png" alt="" width={28} height={28} className="rounded-md opacity-50" />
+                    <Image src="/tkimlogo.png?v=20260530" alt="" width={28} height={28} className="rounded-md opacity-50" />
                   </div>
                 )}
               </div>

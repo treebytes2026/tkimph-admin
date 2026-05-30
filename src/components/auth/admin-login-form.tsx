@@ -34,7 +34,7 @@ export function AdminLoginForm() {
   return (
     <div className="w-full max-w-md rounded-[1.5rem] border border-primary/20 bg-white/90 p-6 shadow-[0_28px_80px_-40px_rgba(28,93,55,0.55)] backdrop-blur sm:p-8">
       <div className="mb-6 flex items-center gap-3">
-        <Image src="/tkimlogo.png" alt="TKimph" width={42} height={42} className="rounded-xl ring-1 ring-primary/15" />
+        <Image src="/tkimlogo.png?v=20260530" alt="TKimph" width={42} height={42} className="rounded-xl ring-1 ring-primary/15" />
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Administrator

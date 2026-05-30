@@ -1048,7 +1048,7 @@ function CheckoutPageInner() {
                       />
                     ) : (
                       <div className="flex size-full items-center justify-center">
-                        <Image src="/tkimlogo.png" alt="" width={24} height={24} className="rounded opacity-60" />
+                        <Image src="/tkimlogo.png?v=20260530" alt="" width={24} height={24} className="rounded opacity-60" />
                       </div>
                     )}
                   </div>
